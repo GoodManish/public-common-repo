@@ -1,31 +1,31 @@
---
+
 My_Object object2= org.apache.commons.lang.SerializationUtils.clone(object1);
 
---
+
 For complicated objects and when performance is not significant i use a json library, like gson to serialize the object to json text, then deserialize the text to get new object.
 gson which based on reflection will works in most cases, except that transient fields will not be copied and objects with circular reference with cause StackOverflowError.
 
-public static <T> T copy(T anObject, Class<T> classInfo) {
-    Gson gson = new GsonBuilder().create();
-    String text = gson.toJson(anObject);
-    T newObject = gson.fromJson(text, classInfo);
-    return newObject;
-}
-public static void main(String[] args) {
-    String originalObject = "hello";
-    String copiedObject = copy(originalObject, String.class);
-}
+    public static <T> T copy(T anObject, Class<T> classInfo) {
+        Gson gson = new GsonBuilder().create();
+        String text = gson.toJson(anObject);
+        T newObject = gson.fromJson(text, classInfo);
+        return newObject;
+    }
+    public static void main(String[] args) {
+        String originalObject = "hello";
+        String copiedObject = copy(originalObject, String.class);
+    }
 
---1--
-package com.example.demo;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+    package com.example.demo;
 
-import java.time.Instant;
-import java.util.List;
+    import com.google.gson.Gson;
+    import com.google.gson.GsonBuilder;
 
-public class TestGsonWayClass {
+    import java.time.Instant;
+    import java.util.List;
+
+    public class TestGsonWayClass {
 
     public static Bookmark copy(Bookmark anObject, Class<Bookmark> classInfo) {
         Gson gson = new GsonBuilder().create();
@@ -63,48 +63,44 @@ public class TestGsonWayClass {
 
         return bookmark;
     }
-}
---2--
-package com.example.demo;
+    }
 
-import lombok.*;
+        package com.example.demo;
+        import lombok.*;
+        import java.io.Serializable;
 
-import java.io.Serializable;
+        @Data
+        @AllArgsConstructor
+        @NoArgsConstructor
+        @Getter
+        @Setter
+        @ToString
+        public class Address /*implements Serializable*/ {
+            private String street;
+            private String city;
+            private String state;
+            private String zip;
+        }
 
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-@Getter
-@Setter
-@ToString
-public class Address /*implements Serializable*/ {
-    private String street;
-    private String city;
-    private String state;
-    private String zip;
-}
---3--
 
-package com.example.demo;
+        package com.example.demo;
+        import lombok.*;
+        import java.io.Serializable;
+        import java.time.Instant;
+        import java.util.ArrayList;
+        import java.util.List;
 
-import lombok.*;
+        @Getter
+        @Setter
+        @AllArgsConstructor
+        @NoArgsConstructor
+        @ToString
+        public class Bookmark /*implements Serializable*/ {
 
-import java.io.Serializable;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
+            private Long id;
+            private String title;
+            private String url;
+            private Instant createdAt;
+            private List<Address> addresses = new ArrayList();
 
-@Getter
-@Setter
-@AllArgsConstructor
-@NoArgsConstructor
-@ToString
-public class Bookmark /*implements Serializable*/ {
-
-    private Long id;
-    private String title;
-    private String url;
-    private Instant createdAt;
-    private List<Address> addresses = new ArrayList();
-
-}
+        }
