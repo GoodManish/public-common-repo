@@ -1,0 +1,51 @@
+from pyinfra.operations import apt, files, server
+from pyinfra.operations import iptables
+
+# Step 1: Stop, disable, and mask firewalld
+server.shell(
+    name='Stop, disable, and mask firewalld',
+    commands=[
+        'sudo systemctl stop firewalld',
+        'sudo systemctl disable firewalld',
+        'sudo systemctl mask firewalld'
+    ]
+)
+
+# Step 2: Install and configure iptables services
+apt.packages(
+    name='Install iptables-services',
+    packages=['iptables-services'],
+    update=True  # Update the package list before installing
+)
+
+server.shell(
+    name='Enable and start iptables service',
+    commands=[
+        'sudo systemctl enable iptables',
+        'sudo systemctl start iptables',
+        'sudo systemctl status iptables'
+    ]
+)
+
+# Step 3: Configure iptables rules
+iptables.chain('input', present=True)
+
+# Accept packets from specific source IP and port 8082, reject others by default
+iptables.rule(
+    chain='INPUT',
+    jump='ACCEPT',
+    present=True,
+    protocol='tcp',
+    source='176.5.105.195',
+    destination_port=8082
+)
+iptables.rule(
+    chain='INPUT',
+    jump='REJECT',
+    present=True,
+    protocol='tcp',
+    destination_port=8082
+)
+
+# Apply the iptables rules
+iptables.apply()
