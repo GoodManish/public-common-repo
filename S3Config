@@ -1,0 +1,41 @@
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.*;
+
+import java.io.File;
+
+public class S3Service {
+
+    private final S3Client s3Client;
+
+    public S3Service() {
+        AwsBasicCredentials awsCreds = AwsBasicCredentials.create(
+                "your-access-key",
+                "your-secret-key");
+
+        this.s3Client = S3Client.builder()
+                .region(Region.US_EAST_1) // Change the region if necessary
+                .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
+                .build();
+    }
+
+    public void uploadFile(String bucketName, String key, File file) {
+        PutObjectRequest request = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
+
+        s3Client.putObject(request, file.toPath());
+    }
+
+    public void downloadFile(String bucketName, String key, File destinationFile) {
+        GetObjectRequest request = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
+
+        s3Client.getObject(request, destinationFile.toPath());
+    }
+}
