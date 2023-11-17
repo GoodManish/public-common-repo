@@ -1,0 +1,55 @@
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.Expiration;
+import software.amazon.awssdk.services.s3.model.ExpirationStatus;
+import software.amazon.awssdk.services.s3.model.Filter;
+import software.amazon.awssdk.services.s3.model.LifecycleConfiguration;
+import software.amazon.awssdk.services.s3.model.LifecycleRule;
+import software.amazon.awssdk.services.s3.model.PutBucketLifecycleConfigurationRequest;
+
+@Configuration
+public class S3ClientConfiguration {
+
+    @Value("${aws.s3.accessKey}")
+    private String accessKey;
+
+    @Value("${aws.s3.secretKey}")
+    private String secretKey;
+
+    @Value("${aws.s3.region}")
+    private String region;
+
+    @Value("${aws.s3.bucketName}")
+    private String bucketName;
+
+    @Bean
+    public S3Client s3Client() {
+        S3Client s3Client = S3Client.builder()
+                .region(Region.of(region))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
+                .build();
+
+        // Configure the lifecycle rule
+        LifecycleRule rule = LifecycleRule.builder()
+                .id("DeleteOldFiles")
+                .filter(Filter.builder().prefix("your-folder-prefix/").build())
+                .expiration(Expiration.builder().days(30).build())
+                .status(ExpirationStatus.ENABLED)
+                .build();
+
+        // Set the lifecycle configuration for the bucket
+        PutBucketLifecycleConfigurationRequest request = PutBucketLifecycleConfigurationRequest.builder()
+                .bucket(bucketName)
+                .lifecycleConfiguration(LifecycleConfiguration.builder().rules(rule).build())
+                .build();
+
+        s3Client.putBucketLifecycleConfiguration(request);
+
+        return s3Client;
+    }
+}
