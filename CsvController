@@ -1,0 +1,29 @@
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.io.IOException;
+
+@RestController
+@RequestMapping("/api/csv")
+public class CsvController {
+
+    private final CustomerService customerService;
+
+    @Autowired
+    public CsvController(CustomerService customerService) {
+        this.customerService = customerService;
+    }
+
+    @GetMapping("/generate-and-upload")
+    public String generateAndUploadCsv() {
+        try {
+            customerService.generateAndUploadCsv("your-s3-bucket-name", "path/to/your/file.csv");
+            return "CSV generated and uploaded successfully!";
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "Error generating or uploading CSV.";
+        }
+    }
+}
