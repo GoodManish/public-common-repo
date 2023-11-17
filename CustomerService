@@ -1,0 +1,47 @@
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.List;
+
+@Service
+public class CustomerService {
+
+    private final CustomerRepository customerRepository;
+    private final S3Client s3Client;
+
+    @Autowired
+    public CustomerService(CustomerRepository customerRepository, S3Client s3Client) {
+        this.customerRepository = customerRepository;
+        this.s3Client = s3Client;
+    }
+
+    public void generateAndUploadCsv(String bucketName, String key) throws IOException {
+        List<Customer> customers = customerRepository.findAll();
+
+        // Create a CSV file
+        Path csvFilePath = Path.of("customer_data.csv");
+        try (CSVPrinter csvPrinter = new CSVPrinter(new FileWriter(csvFilePath.toFile()), CSVFormat.DEFAULT)) {
+            // Add CSV headers
+            csvPrinter.printRecord("ID", "Name", "Email");
+
+            // Add customer data
+            for (Customer customer : customers) {
+                csvPrinter.printRecord(customer.getId(), customer.getName(), customer.getEmail());
+            }
+        }
+
+        // Upload CSV file to S3
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
+        s3Client.putObject(putObjectRequest, csvFilePath);
+    }
+}
