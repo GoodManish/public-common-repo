@@ -1,0 +1,126 @@
+public interface CsvGenerator<T> {
+    String generateCsv(List<T> data);
+}
+----------
+@Service
+public class AccountCsvGenerator implements CsvGenerator<Account> {
+    @Override
+    public String generateCsv(List<Account> data) {
+        // Implement CSV conversion logic for the Account entity
+    }
+}
+
+// Repeat the above class structure for other entities
+
+
+--------
+public interface S3Uploader {
+    void uploadToS3(String key, String csvData);
+}
+@Service
+public class AmazonS3Uploader implements S3Uploader {
+
+    @Autowired
+    private AmazonS3 amazonS3;
+
+    @Value("${s3.bucket.name}")
+    private String s3BucketName;
+
+    @Override
+    public void uploadToS3(String key, String csvData) {
+        amazonS3.putObject(s3BucketName, key, csvData);
+    }
+}
+
+----
+@Service
+public class CsvService {
+
+    @Autowired
+    private S3Uploader s3Uploader;
+
+    @Scheduled(cron = "0 0 22 * * ?") // Run every day at 10 PM
+    public void generateAndUploadCsv() {
+        generateAndUpload(Account.class);
+        generateAndUpload(Customer.class);
+        // Add more entities as needed
+    }
+
+    private <T, K> void generateAndUpload(Class<T> entityClass) {
+        JpaRepository<T, K> repository = // Get the repository for the entity dynamically
+                (JpaRepository<T, K>) ApplicationContextHolder.getContext().getBean(getRepositoryBeanName(entityClass));
+
+        CsvGenerator<T> csvGenerator = // Get the CSV generator for the entity dynamically
+                (CsvGenerator<T>) ApplicationContextHolder.getContext().getBean(getCsvGeneratorBeanName(entityClass));
+
+        List<T> data = repository.findAll();
+        String csvData = csvGenerator.generateCsv(data);
+
+        String s3Key = "MY-BUCKET-66987/" + entityClass.getSimpleName() +
+                       "/" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + "/file.csv";
+
+        s3Uploader.uploadToS3(s3Key, csvData);
+    }
+
+    private String getRepositoryBeanName(Class<?> entityClass) {
+        return StringUtils.uncapitalize(entityClass.getSimpleName()) + "Repository";
+    }
+
+    private String getCsvGeneratorBeanName(Class<?> entityClass) {
+        return StringUtils.uncapitalize(entityClass.getSimpleName()) + "CsvGenerator";
+    }
+}
+
+-------------
+
+@RestController
+@RequestMapping("/api/csv")
+public class CsvController {
+
+    @Autowired
+    private CsvService<Account, Long> accountCsvService; // Example with Long primary key
+
+    @Autowired
+    private CsvService<Customer, String> customerCsvService; // Example with String primary key
+
+    @GetMapping("/generateAndUploadAccountCsv")
+    public ResponseEntity<String> generateAndUploadAccountCsv() {
+        accountCsvService.uploadCsvToS3();
+        return ResponseEntity.ok("Account CSV generation and upload initiated.");
+    }
+
+    @GetMapping("/generateAndUploadCustomerCsv")
+    public ResponseEntity<String> generateAndUploadCustomerCsv() {
+        customerCsvService.uploadCsvToS3();
+        return ResponseEntity.ok("Customer CSV generation and upload initiated.");
+    }
+}
+--------------
+@Component
+public class ApplicationContextHolder implements ApplicationContextAware {
+
+    private static ApplicationContext context;
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) {
+        context = applicationContext;
+    }
+
+    public static ApplicationContext getContext() {
+        return context;
+    }
+}
+------------
+@RestController
+@RequestMapping("/api/csv")
+public class CsvController {
+
+    @Autowired
+    private CsvService csvService;
+
+    @GetMapping("/generateAndUploadCsv")
+    public ResponseEntity<String> generateAndUploadCsv() {
+        csvService.generateAndUploadCsv();
+        return ResponseEntity.ok("CSV generation and upload initiated for all entities.");
+    }
+}
