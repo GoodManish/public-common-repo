@@ -1,0 +1,4 @@
+
+"I'm working on GTBA-2907. As a part of this, I've created an S3 bucket in our dev infra. And, I'm able to connect it with the Client application. I'll share the required Access, SecretKey with the lucid team. We are planning to generate a sample Accounts or Customer table data. So, For the Table and columns mapping ill be connecting with Ramu "
+
+"I'm currently handling GTBA-2907, which involves setting up an S3 bucket in our development infrastructure. I have successfully established a connection with the client application. I will provide the necessary Access and SecretKey details to the Lucid team. Our next step is to generate sample data for the Accounts or Customer table. I will be coordinating with Ramu for the mapping of tables and columns."
