@@ -1,0 +1,19 @@
+graph TD
+
+classDef service fill:#FFF,stroke:#2196F3,stroke-width:2px;
+classDef repository fill:#FFF,stroke:#4CAF50,stroke-width:2px;
+classDef generator fill:#FFF,stroke:#FFC107,stroke-width:2px;
+classDef s3 fill:#FFF,stroke:#E91E63,stroke-width:2px;
+
+class CsvService service
+class S3Uploader s3
+class AccountCsvGenerator generator
+class CustomerCsvGenerator generator
+class JpaRepository repository
+
+CsvService -->|uses| S3Uploader
+CsvService -->|uses| AccountCsvGenerator
+CsvService -->|uses| CustomerCsvGenerator
+CsvService -->|uses| JpaRepository
+CsvService -->|uses| JpaRepository
+
