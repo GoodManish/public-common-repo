@@ -1,0 +1,39 @@
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.List;
+
+@Service
+public class CsvExportService {
+
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    public void exportToCsv() throws IOException {
+        int pageSize = 100;
+
+        try (FileWriter fileWriter = new FileWriter("customer_data.csv");
+             CSVPrinter csvPrinter = new CSVPrinter(fileWriter, CSVFormat.DEFAULT.withHeader("id", "name", "email"))) {
+
+            for (int currentPage = 0; ; currentPage++) {
+                PageRequest pageRequest = PageRequest.of(currentPage, pageSize);
+                Page<Customer> customerPage = customerRepository.findAll(pageRequest);
+
+                List<Customer> customers = customerPage.getContent();
+                for (Customer customer : customers) {
+                    csvPrinter.printRecord(customer.getId(), customer.getName(), customer.getEmail());
+                }
+
+                if (!customerPage.hasNext()) {
+                    break;
+                }
+            }
+        }
+    }
+}
