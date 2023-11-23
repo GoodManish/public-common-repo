@@ -1,0 +1,71 @@
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.List;
+
+@Service
+public class CsvExportService {
+
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    // Add other repositories as needed
+
+    public void exportToCsv() throws IOException {
+        exportEntityToCsv("customer_data.csv", Customer.class, customerRepository.findAll());
+        exportEntityToCsv("product_data.csv", Product.class, productRepository.findAll());
+        exportEntityToCsv("user_data.csv", User.class, userRepository.findAll());
+        // Add other entities as needed
+    }
+
+    private <T> void exportEntityToCsv(String fileName, Class<T> entityType, List<T> entities) throws IOException {
+        try (FileWriter fileWriter = new FileWriter(fileName);
+             CSVPrinter csvPrinter = new CSVPrinter(fileWriter, CSVFormat.DEFAULT.withHeader(getHeaders(entityType)))) {
+
+            for (T entity : entities) {
+                csvPrinter.printRecord(getFieldValues(entityType, entity));
+            }
+        }
+    }
+
+    private <T> String[] getHeaders(Class<T> entityType) {
+        Field[] fields = entityType.getDeclaredFields();
+        String[] headers = new String[fields.length];
+
+        for (int i = 0; i < fields.length; i++) {
+            headers[i] = fields[i].getName();
+        }
+
+        return headers;
+    }
+
+    private <T> Object[] getFieldValues(Class<T> entityType, T entity) {
+        Field[] fields = entityType.getDeclaredFields();
+        Object[] values = new Object[fields.length];
+
+        for (int i = 0; i < fields.length; i++) {
+            try {
+                fields[i].setAccessible(true);
+                values[i] = fields[i].get(entity);
+            } catch (IllegalAccessException e) {
+                // Handle exception
+                e.printStackTrace();
+            }
+        }
+
+        return values;
+    }
+}
