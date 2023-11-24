@@ -1,0 +1,14 @@
+User
+For Standup call , have to say 
+
+"I'm working on GTBA-2329 . Y'day, I was involved in discussions with the Lucid team & clarification call with SK. 
+We have an understanding that, for a few Tables, only incremental data should be fed. So the Code and other changes are in progress.
+We have got the clarification from the SK, that we should use ODS database not the Transact Database for Datalake requirement."
+
+
+
+Good morning/afternoon/evening, everyone. Today, I'm focused on GTBA-2329. Yesterday, I engaged in productive discussions with the Lucid team and had a clarification call with SK. We've reached an understanding that, for specific tables, only incremental data needs to be fed. As a result, I'm actively working on code changes and other necessary adjustments.
+
+I received clarification from SK that, for our Datalake requirement, we should utilize the ODS database instead of the Transact Database. This insight guides our approach, and I'll be incorporating this into the ongoing development.
+
+If anyone has questions or needs further details, feel free to reach out. Thank you
