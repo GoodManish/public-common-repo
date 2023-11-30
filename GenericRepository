@@ -1,0 +1,38 @@
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.NoRepositoryBean;
+import org.springframework.data.repository.PagingAndSortingRepository;
+
+import java.io.Serializable;
+
+@NoRepositoryBean
+public interface GenericRepository<T, ID extends Serializable> extends PagingAndSortingRepository<T, ID> {
+
+    Page<T> findAll(Pageable pageable);
+}
+
+
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface YourEntityRepository extends GenericRepository<YourEntity, Long> {
+    // Add specific methods for YourEntity if needed
+}
+
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+
+@Service
+public class YourEntityService {
+
+    @Autowired
+    private YourEntityRepository yourEntityRepository;
+
+    public Page<YourEntity> getAllEntities(int pageNumber, int pageSize) {
+        PageRequest pageRequest = PageRequest.of(pageNumber, pageSize);
+        return yourEntityRepository.findAll(pageRequest);
+    }
+}
