@@ -1,0 +1,34 @@
+package com.codenotfound;
+
+public class StringPrefixLogic {
+
+    public static String determinePrefix(String input) {
+        if (input.startsWith("Fhkg")) {
+            return "FHKG";
+        } else if (input.startsWith("Fsgp")) {
+            return "FSGP";
+        } else if (input.startsWith("F")) {
+            return "Common";
+        } else {
+            // Handle other cases or return a default value as needed
+            return "Unknown";
+        }
+    }
+
+    public static void main(String[] args) {
+//        String example1 = "FDates";
+//        String example2 = "FhkgCustomer";
+//        String example3 = "FsgpAccounts";
+//        String example4 = "OtherCase";
+
+        String example1 = "FBasicRateTextMl";
+        String example2 = "FhkgAaArrangementActivity";
+        String example3 = "FsgpEbContractsBalances";
+        String example4 = "FCompany";
+
+        System.out.println(example1 + " -> " + determinePrefix(example1));
+        System.out.println(example2 + " -> " + determinePrefix(example2));
+        System.out.println(example3 + " -> " + determinePrefix(example3));
+        System.out.println(example4 + " -> " + determinePrefix(example4));
+    }
+}
