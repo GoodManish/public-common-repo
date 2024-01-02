@@ -1,0 +1,46 @@
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
+
+@Service
+public class FDatesPrevService {
+
+    @Autowired
+    private FDatesPrevRepository fDatesPrevRepository;
+
+    @Autowired
+    private FDatesRepository fDatesRepository; // Assuming you have an FDatesRepository for F_DATES table
+
+    @Transactional
+    public void updateLastWorkingDateAndFlag(String lastWorkingDate) {
+        Optional<FDatesPrev> fDatesPrevOptional = fDatesPrevRepository.findByLastWorkingDate(lastWorkingDate);
+
+        if (fDatesPrevOptional.isPresent()) {
+            FDatesPrev fDatesPrev = fDatesPrevOptional.get();
+
+            // Fetch lastWorkingDate from F_DATES table
+            Optional<FDates> fDatesOptional = fDatesRepository.findByLastWorkingDate(lastWorkingDate);
+            if (fDatesOptional.isPresent()) {
+                FDates fDates = fDatesOptional.get();
+
+                // Update the fields
+                fDatesPrev.setLastWorkingDate(fDates.getLastWorkingDate());
+
+                // Check if isFileDeliveredFlag is true before updating
+                if (fDatesPrev.isFileDeliveredFlag() != null && fDatesPrev.isFileDeliveredFlag()) {
+                    fDatesPrev.setFileDeliveredFlag(true);
+                }
+
+                // Save the updated entity
+                fDatesPrevRepository.save(fDatesPrev);
+                System.out.println("Record updated successfully.");
+            } else {
+                System.out.println("Record not found in F_DATES table for lastWorkingDate: " + lastWorkingDate);
+            }
+        } else {
+            System.out.println("Record not found for lastWorkingDate: " + lastWorkingDate);
+        }
+    }
+}
