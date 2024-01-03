@@ -26,3 +26,6 @@ Security best practices will be followed for handling database credentials, AWS 
 Documentation:
 
 I'll document the architecture, components, and configurations comprehensively to facilitate maintenance and future enhancements. Clear instructions for deploying and configuring the application will be provided.
+
+-----
+"I've previously developed a framework that simplifies the process of creating CSV files and moving them to an S3 bucket. The framework operates by taking a Java Entity class and a List of Entity Data as arguments. It efficiently handles the asynchronous creation of CSV files and ensures their organized placement in an S3 bucket. Additionally, the framework automatically directs the files to a specific folder within the S3 bucket, streamlining the entire process."
