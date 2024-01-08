@@ -1,0 +1,65 @@
+package com.codenotfound;
+
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.stream.Stream;
+
+public class TestFolderName {
+    public static void main(String[] args) {
+        String tableName = "\"FHKG_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE\"";
+        customTableName(tableName);
+        tableName = "\"FHKG_AA_ACCOUNT_DETAILS_LAST_RENEW_DATE\"";
+        customTableName(tableName);
+
+        tableName = "\"FIND_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE\"";
+        customTableName(tableName);
+        tableName = "\"FIND_AA_ACCOUNT_DETAILS_LAST_RENEW_DATE\"";
+        customTableName(tableName);
+
+        tableName = "\"F_PAYMENT_SCHEDULE_PERCENTAGE\"";
+        customTableName(tableName);
+
+        tableName = "\"F_DATES\"";
+        customTableName(tableName);
+
+        tableName = "\"F_BASIC_RATE_TEXT_ML\"";
+        customTableName(tableName);
+
+    }
+
+    private static void customTableName(String tableName) {
+        tableName = tableName.replace("\"", "");
+
+        String currentDate = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+        String s3FolderPath = currentDate + "/" + getFolderNameFromTableName(tableName);
+        String csvFileName = s3FolderPath + "/" + tableName + ".csv";
+
+        System.out.println("s3FolderPath = " + s3FolderPath);
+        System.out.println("csvFileName  = " + csvFileName + "\n");
+    }
+
+/*    public static String getFolderNameFromTableName(String tableName) {
+        // Extract the folder name from the table name (e.g., "FHKG_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE" => "AaArrPaymentSchedulePercentage")
+        String[] parts = tableName.split("_");
+        StringBuilder folderName = new StringBuilder();
+        for (String part : parts) {
+            folderName.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1).toLowerCase());
+        }
+        return folderName.toString();
+    }*/
+
+    public static String getFolderNameFromTableName(String tableName) {
+        // Split the table name into parts and skip the first element using a stream
+        String[] parts = tableName.split("_");
+        Stream<String> partsStream = Arrays.stream(parts).skip(1);
+
+        // Construct the folder name with proper casing using stream operations
+        return partsStream.collect(StringBuilder::new,
+                        (builder, part) -> builder.append(Character.toUpperCase(part.charAt(0)))
+                                .append(part.substring(1).toLowerCase()),
+                        StringBuilder::append)
+                .toString();
+    }
+
+}
