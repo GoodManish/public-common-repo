@@ -1,0 +1,39 @@
+public void generateCsvAndUploadToS3(String tableName, String customSql) {
+    String csvFileName = generateCsv(tableName, customSql);
+    // Add logic for uploading to S3 if needed
+}
+
+private String generateCsv(String tableName, String customSql) {
+    tableName = tableName.replace("\"", "");
+    String csvFileName = tableName + ".csv";
+
+    try (PreparedStatement preparedStatement = jdbcTemplate.getDataSource().getConnection().prepareStatement(customSql)) {
+        int offset = 0;
+
+        try (FileWriter fileWriter = new FileWriter(csvFileName)) {
+            writeCsvHeader(fileWriter, preparedStatement);
+
+            do {
+                writeCsvData(fileWriter, preparedStatement, offset);
+                offset += PAGE_SIZE;
+            } while (hasMoreRows(preparedStatement, offset));
+        }
+
+        return csvFileName;
+
+    } catch (SQLException | IOException e) {
+        log.error("Error generating CSV file:", e);
+        throw new RuntimeException("CSV generation failed", e); // Handle appropriately
+    }
+}
+
+
+--------
+
+String customSqlCustomer = "SELECT * FROM \"FHKG_CUSTOMER\" LIMIT ? OFFSET ?";
+String customSqlAccount = "SELECT * FROM \"FHKG_ACCOUNT\" LIMIT ? OFFSET ?";
+String customSqlDates = "SELECT * FROM \"F_DATES\" WHERE \"RECID\" LIKE 'HK%' OR LIKE 'SG%' LIMIT ? OFFSET ?";
+
+generateCsvAndUploadToS3("FHKG_CUSTOMER", customSqlCustomer);
+generateCsvAndUploadToS3("FHKG_ACCOUNT", customSqlAccount);
+generateCsvAndUploadToS3("F_DATES", customSqlDates);
