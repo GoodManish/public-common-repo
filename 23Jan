@@ -64,58 +64,7 @@ public class CsvGeneratorService {
         uploadFileToS3(csvFileName, tableName);
     }
 
-//    @Async
-//    public void generateCsvAndUploadToS3(String tableName) {
-//        String csvFileName = CustomQueryHelper.getQuery(tableName);
-//        uploadFileToS3(csvFileName, tableName);
-//    }
 
-/*    public void generateCsvAndUploadToS3(String tableName, boolean filterByDate) {
-        String customSql = generateCustomSql(tableName, filterByDate);
-        String csvFileName = generateCsv(tableName, customSql);
-        uploadFileToS3(csvFileName, tableName);
-        // Optionally: deleteLocalFile(csvFileName); // If local deletion is needed
-    }*/
-
-
-/*    public void generateCsvAndUploadToS3(List<String> tableNames) {
-        ExecutorService executorService = Executors.newFixedThreadPool(tableNames.size());
-
-        List<CompletableFuture<Void>> futures = tableNames.stream()
-                .map(tableName -> CompletableFuture.runAsync(() -> {
-                    String csvFileName = generateCsv(tableName);
-                    uploadFileToS3(csvFileName, tableName);
-                }, executorService))
-                .toList();
-
-        CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-
-        allOf.join(); // Wait for all CSV files to be generated and uploaded
-
-        executorService.shutdown();
-    }*/
-//    private String generateCsv(String tableName) {
-//        tableName = tableName.replace("\"", "");
-//        String csvFileName = tableName + ".csv";
-//
-//        String sql = "SELECT * FROM \"" + tableName + "\" LIMIT ? OFFSET ?";
-//
-//        try (PreparedStatement preparedStatement = jdbcTemplate.getDataSource().getConnection().prepareStatement(sql)) {
-//            int offset = 0;
-//            try (FileWriter fileWriter = new FileWriter(csvFileName)) {
-//                writeCsvHeader(fileWriter, preparedStatement);
-//                do {
-//                    writeCsvData(fileWriter, preparedStatement, offset);
-//                    offset += PAGE_SIZE;
-//                } while (hasMoreRows(preparedStatement, offset));
-//            }
-//            return csvFileName;
-//
-//        } catch (SQLException | IOException e) {
-//            log.error("Error generating CSV file:", e);
-//            throw new RuntimeException("CSV generation failed", e); // Handle appropriately
-//        }
-//    }
 private String generateCsv(String tableName) {
     tableName = tableName.replace("\"", "");
     String csvFileName = tableName + ".csv";
@@ -232,7 +181,7 @@ private String generateCsv(String tableName) {
     }
 
 }
---------------------------------------------------------------------------------------
+------------------------------------------Enum--------------------------------------------
 package com.socgen.gtba.lucidlink.util;
 
 import lombok.Getter;
@@ -269,7 +218,7 @@ public enum TableSqlEnum {
         return TABLE_SQL_CONDITION_MAP.getOrDefault(tableName, "");
     }
 }
--------------------------------------------------------------------------------------------------
+-------------------------------------------Constant------------------------------------------------------
 public class Constant {
 
     public static final String CSV = ".csv";
@@ -279,4 +228,32 @@ public class Constant {
     public static final String RECID_SQL_CONDITION = " WHERE \"RECID\" LIKE 'HK%' OR \"RECID\" LIKE 'IN%' ";
     public static final String LIMIT_OFFSET_SQL_CONDITION = " LIMIT ? OFFSET ? ";
 }
--------------------------------------------------------------------------------------------------------
+----------------------------------------------Controller---------------------------------------------------------
+    @GetMapping("/csv2")
+    public ResponseEntity<String> generate3() {
+            List<CompletableFuture<String>> futures = new ArrayList<>();
+
+            for (TableSqlEnum tableEnum : TableSqlEnum.values()) {
+                String tableName = tableEnum.name();
+                CompletableFuture<String> future = csvGeneratorService.generateCsvAndUploadToS3Async(tableName);
+                futures.add(future);
+            }
+
+            // Wait for all CompletableFuture to complete
+            CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+
+            // Handle completion (this is non-blocking)
+            allOf.whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    log.error("Error generating or uploading CSV files concurrently:", throwable);
+                } else {
+                    log.info("All CSV files generated and uploaded successfully");
+                }
+            });
+
+            // Block and wait for all CompletableFuture to complete (this is optional)
+            allOf.join();
+
+        return ResponseEntity.ok("--- Done ---");
+    }
+------------------------------------------------------------------------------------------------------------
