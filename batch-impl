@@ -49,3 +49,22 @@
         }
         return batches;
     }
+
+
+-------------------------
+    private void processTable(TableSqlEnum tableName) {
+        try {
+            log.info("Acquiring permit for table: {}", tableName);
+            concurrencyLimiter.acquire(); // Acquire a permit, block if none available
+            log.info("Permit acquired for table: {}", tableName);
+
+            CompletableFuture<String> future = csvGenerator.generateCsvAndUploadToS3Async(tableName.name());
+            future.join(); // Ensure the task completes before releasing the permit
+            log.info("CSV file generated and uploaded for table: {}", tableName);
+        } catch (Exception e) {
+            log.error("Error processing table: {}", tableName, e);
+        } finally {
+            log.info("Releasing permit for table: {}", tableName);
+            concurrencyLimiter.release(); // Release the permit
+        }
+    }
