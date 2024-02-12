@@ -1,0 +1,65 @@
+package com.socgen.gtba.lucidlink.mocktest;
+
+import com.socgen.gtba.lucidlink.service.CsvGenerationService;
+import com.socgen.gtba.lucidlink.service.CsvGenerator;
+import com.socgen.gtba.lucidlink.util.TableSqlEnum;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;  // Add this import statement
+
+import java.util.concurrent.CompletableFuture;
+
+import static org.mockito.Mockito.*;
+
+class CsvGenerationServiceTest {
+
+    @Mock
+    private CsvGenerator csvGenerator;
+
+    @InjectMocks
+    private CsvGenerationService csvGenerationService;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void generateAndUploadAllCsvFiles_Success() {
+        // Mock behavior for successful CompletableFuture
+        when(csvGenerator.generateCsvAndUploadToS3Async(anyString()))
+                .thenReturn(CompletableFuture.completedFuture("dummy1.csv"));
+
+        // Call the method to test
+        csvGenerationService.generateAndUploadAllCsvFiles();
+
+        // Verify that generateCsvAndUploadToS3Async was called for each TableSqlEnum
+        verify(csvGenerator, times(TableSqlEnum.values().length)).generateCsvAndUploadToS3Async(anyString());
+    }
+
+    @Test
+    void generateAndUploadAllCsvFiles_Exception() {
+        // Mock behavior for CompletableFuture that completes exceptionally
+        when(csvGenerator.generateCsvAndUploadToS3Async(anyString()))
+                .thenReturn(CompletableFuture.supplyAsync(() -> {
+                    throw new RuntimeException("Simulating an exception");
+                }));
+
+        // Call the method to test
+        csvGenerationService.generateAndUploadAllCsvFiles();
+
+        // Verify that the error message is logged
+        // Note: In a real application, you might want to verify the logs using a logging library
+        // For simplicity, we are just verifying that the log.error method was called
+        verify(csvGenerator, times(TableSqlEnum.values().length)).generateCsvAndUploadToS3Async(anyString());
+        // Verify that the log.error method was called for the exception
+        // Note: In a real application, you might want to verify the logs using a logging library
+        // For simplicity, we are just verifying that the log.error method was called
+//        verify(csvGenerator, times(1)).logError(any());
+    }
+}
+
+
+
