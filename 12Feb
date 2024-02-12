@@ -1,0 +1,130 @@
+import lombok.Getter;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+import static com.socgen.gtba.lucidlink.util.Constant.*;
+
+@Getter
+public enum TableSqlEnum {
+/*    FHKG_CUSTOMER(QueryHelper.getBankingDtRecidSqlCondition()),
+    FIND_CUSTOMER(QueryHelper.getBankingDtRecidSqlCondition()),
+
+    FHKG_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE(QueryHelper.getBankingDtSqlCondition()),
+    FIND_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE(QueryHelper.getBankingDtSqlCondition()),
+
+    F_DATES(QueryHelper.getRecidSqlCondition()),
+    F_COMPANY(QueryHelper.getNoSqlCondition());
+
+    private static final Map<String, String> TABLE_SQL_CONDITION_MAP = new HashMap<>();
+
+    static {
+        for (TableSqlEnum sqlEnum : values()) {
+            TABLE_SQL_CONDITION_MAP.put(sqlEnum.name(), sqlEnum.getSqlCondition());
+        }
+    }
+
+    private final String sqlCondition;
+
+    TableSqlEnum(String sqlCondition) {
+        this.sqlCondition = sqlCondition;
+    }
+
+    public static String getSqlCondition(String tableName) {
+        return TABLE_SQL_CONDITION_MAP.getOrDefault(tableName, "");
+    }*/
+    FHKG_CUSTOMER(QueryHelper::getBankingDtRecidSqlCondition),
+    FIND_CUSTOMER(QueryHelper::getBankingDtRecidSqlCondition),
+
+    FHKG_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE(QueryHelper::getBankingDtSqlCondition),
+    FIND_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE(QueryHelper::getBankingDtSqlCondition),
+
+    F_DATES(QueryHelper::getRecidSqlCondition),
+    F_COMPANY(QueryHelper::getNoSqlCondition);
+
+    private final Function<QueryHelper, String> sqlConditionSupplier;
+
+    TableSqlEnum(Function<QueryHelper, String> sqlConditionSupplier) {
+        this.sqlConditionSupplier = sqlConditionSupplier;
+    }
+
+    public String getSqlCondition(QueryHelper queryHelper) {
+        return sqlConditionSupplier.apply(queryHelper);
+    }
+}
+
+-------------------------------------------------------------
+
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Service;
+
+@Service
+public class QueryHelper {
+/*    private static String currentDate;
+
+    public QueryHelper(final Environment environment) {
+        currentDate = environment.getRequiredProperty("currentdate");
+    }
+
+    public static final String BANKING_DT_RECID_SQL_CONDITION = " WHERE \"RECID\" LIKE 'HK%' OR \"RECID\" LIKE 'IN%' AND \"BANKING_DATE_TL\" < ";
+    public static final String BANKING_DT_SQL_CONDITION = " WHERE \"BANKING_DATE_TL\" < ";
+    public static final String RECID_SQL_CONDITION = " WHERE \"RECID\" LIKE 'HK%' OR \"RECID\" LIKE 'IN%' ";
+    public static final String NO_SQL_CONDITION = "";
+    public static final String LIMIT_OFFSET_SQL_CONDITION = " LIMIT ? OFFSET ? ";
+
+    public static String getBankingDtRecidSqlCondition(){
+        return BANKING_DT_RECID_SQL_CONDITION + currentDate;
+    }
+    public static String getBankingDtSqlCondition(){
+        return BANKING_DT_SQL_CONDITION + currentDate;
+    }
+    public static String getRecidSqlCondition(){
+        return RECID_SQL_CONDITION;
+    }
+    public static String getNoSqlCondition(){
+        return NO_SQL_CONDITION;
+    }*/
+private final String currentDate;
+
+    public QueryHelper(final Environment environment) {
+        this.currentDate = environment.getRequiredProperty("currentdate");
+    }
+
+    public String getBankingDtRecidSqlCondition() {
+        return " WHERE \"RECID\" LIKE 'HK%' OR \"RECID\" LIKE 'IN%' AND \"BANKING_DATE_TL\" < " + getCurrentDate();
+    }
+
+    public String getBankingDtSqlCondition() {
+        return " WHERE \"BANKING_DATE_TL\" < " + getCurrentDate();
+    }
+
+    public String getRecidSqlCondition() {
+        return " WHERE \"RECID\" LIKE 'HK%' OR \"RECID\" LIKE 'IN%'";
+    }
+
+    public String getNoSqlCondition() {
+        return "";
+    }
+    public String getLimitOffset() {
+        return " LIMIT ? OFFSET ? ";
+    }
+
+    public String getCurrentDate() {
+        return currentDate;
+    }
+}
+-----------csvgenerator---------------
+
+    private String getSql(String tableName) {
+        TableSqlEnum tableEnum = TableSqlEnum.valueOf(tableName);
+        QueryHelper queryHelper = new QueryHelper(environment); // environment is an instance variable
+
+        String sqlCondition = tableEnum.getSqlCondition(queryHelper);
+        String sql = "SELECT * FROM \"" + tableName + "\"";
+        if (!sqlCondition.isEmpty()) {
+            sql += sqlCondition;
+        }
+        sql += queryHelper.getLimitOffset();
+        return sql;
+    }
