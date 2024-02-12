@@ -1,0 +1,18 @@
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+// ...
+
+@Test
+void generateAndUploadAllCsvFiles_Exception() {
+    // Mock behavior for CompletableFuture that completes exceptionally
+    when(csvGenerator.generateCsvAndUploadToS3Async(anyString()))
+            .thenReturn(CompletableFuture.supplyAsync(() -> {
+                throw new RuntimeException("Simulating an exception");
+            }));
+
+    // Assert that calling generateAndUploadAllCsvFiles() results in a RuntimeException
+    assertThrows(RuntimeException.class, () -> csvGenerationService.generateAndUploadAllCsvFiles());
+
+    // Verify that generateCsvAndUploadToS3Async was called for each TableSqlEnum
+    verify(csvGenerator, times(TableSqlEnum.values().length)).generateCsvAndUploadToS3Async(anyString());
+}
