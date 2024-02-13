@@ -92,3 +92,149 @@ void generateAndUploadAllCsvFiles_Exception() {
     // Verify that generateCsvAndUploadToS3Async was called for each TableSqlEnum
     verify(csvGenerator, times(TableSqlEnum.values().length)).generateCsvAndUploadToS3Async(anyString());
 }
+_----------------
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.core.env.Environment;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.AsyncConfiguration;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.*;
+
+class CsvGeneratorTest {
+
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private AsyncConfiguration asyncConfiguration;
+
+    @Mock
+    private Environment environment;
+
+    @InjectMocks
+    private CsvGenerator csvGenerator;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void generateCsvAndUploadToS3Async_Success() {
+        // Mock behavior for successful CSV generation and S3 upload
+        when(jdbcTemplate.getDataSource().getConnection()).thenReturn(mock(Connection.class));
+        when(asyncConfiguration.asyncTaskExecutor()).thenReturn(Runnable::run);
+        when(environment.getProperty("currentdate")).thenReturn("2022-01-01");
+        when(csvGenerator.generateCsv(anyString())).thenReturn("test.csv");
+
+        // Call the method to test
+        assertDoesNotThrow(() -> csvGenerator.generateCsvAndUploadToS3Async("testTable").get());
+
+        // Verify that generateCsv was called with the expected parameter
+        verify(csvGenerator, times(1)).generateCsv("testTable");
+    }
+
+    @Test
+    void generateCsvAndUploadToS3Async_Exception() {
+        // Mock behavior for CSV generation that results in an exception
+        when(jdbcTemplate.getDataSource().getConnection()).thenReturn(mock(Connection.class));
+        when(asyncConfiguration.asyncTaskExecutor()).thenReturn(Runnable::run);
+        when(environment.getProperty("currentdate")).thenReturn("2022-01-01");
+        when(csvGenerator.generateCsv(anyString())).thenThrow(new RuntimeException("Simulating an exception"));
+
+        // Call the method to test
+        assertThrows(Exception.class, () -> csvGenerator.generateCsvAndUploadToS3Async("testTable").get());
+
+        // Verify that generateCsv was called with the expected parameter
+        verify(csvGenerator, times(1)).generateCsv("testTable");
+    }
+
+    @Test
+    void generateCsv_Success() throws SQLException, IOException {
+        // Mock behavior for successful CSV generation
+        when(jdbcTemplate.getDataSource().getConnection()).thenReturn(mock(Connection.class));
+        when(environment.getProperty("currentdate")).thenReturn("2022-01-01");
+        when(csvGenerator.getSql(anyString())).thenReturn("testSql");
+
+        // Create a temporary file for testing
+        File tempFile = createTempFile();
+
+        // Call the method to test
+        assertDoesNotThrow(() -> csvGenerator.generateCsv("testTable"));
+
+        // Verify that getSql was called with the expected parameter
+        verify(csvGenerator, times(1)).getSql("testTable");
+
+        // Verify the contents of the generated CSV file
+        assertCsvContents(tempFile, "Header1{#]Header2\nData1{#]Data2\n");
+
+        // Verify that the temporary file was deleted
+        verify(tempFile, times(1)).delete();
+    }
+
+    @Test
+    void generateCsv_Exception() throws SQLException, IOException {
+        // Mock behavior for CSV generation that results in an exception
+        when(jdbcTemplate.getDataSource().getConnection()).thenReturn(mock(Connection.class));
+        when(environment.getProperty("currentdate")).thenReturn("2022-01-01");
+        when(csvGenerator.getSql(anyString())).thenReturn("testSql");
+        doThrow(new SQLException("Simulating an exception")).when(jdbcTemplate.getDataSource().getConnection()).close();
+
+        // Create a temporary file for testing
+        File tempFile = createTempFile();
+
+        // Call the method to test
+        assertThrows(Exception.class, () -> csvGenerator.generateCsv("testTable"));
+
+        // Verify that getSql was called with the expected parameter
+        verify(csvGenerator, times(1)).getSql("testTable");
+
+        // Verify that the temporary file was not deleted in case of an exception
+        verify(tempFile, never()).delete();
+    }
+
+    @Test
+    void getSql() {
+        // Mock behavior for getSql
+        when(environment.getProperty("currentdate")).thenReturn("2022-01-01");
+        when(csvGenerator.getSqlCondition("testTable")).thenReturn("testCondition");
+
+        // Call the method to test
+        String sql = csvGenerator.getSql("testTable");
+
+        // Verify the generated SQL
+        assertEquals("SELECT * FROM \"testTable\"testCondition{#] LIMIT ? OFFSET ?", sql);
+    }
+
+    private File createTempFile() throws IOException {
+        File tempFile = File.createTempFile("test", ".csv");
+        tempFile.deleteOnExit();
+        return tempFile;
+    }
+
+    private void assertCsvContents(File file, String expectedContents) throws IOException {
+        String actualContents = Files.readString(file.toPath());
+        assertEquals(expectedContents, actualContents);
+    }
+}
