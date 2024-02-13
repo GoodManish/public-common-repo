@@ -1,0 +1,94 @@
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.Mockito.*;
+
+class S3ServiceTest {
+
+    @Mock
+    private S3Client s3Client;
+
+    @InjectMocks
+    private S3Service s3Service;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void uploadToS3_Success() throws IOException {
+        // Mock behavior for successful S3 upload
+        when(s3Client.putObject(any(PutObjectRequest.class), any(Path.class))).thenReturn(null);
+
+        // Create a temporary file for testing
+        File tempFile = createTempFile();
+
+        // Call the method to test
+        assertDoesNotThrow(() -> s3Service.uploadToS3("testKey", tempFile));
+
+        // Verify that putObject method was called with the expected parameters
+        verify(s3Client, times(1)).putObject(argThat(request ->
+                "testBucket".equals(request.bucket()) && "testKey".equals(request.key())), any(Path.class));
+
+        // Verify that the temporary file was deleted
+        verify(tempFile, times(1)).delete();
+    }
+
+    @Test
+    void uploadToS3_Exception() throws IOException {
+        // Mock behavior for S3 upload that results in an exception
+        when(s3Client.putObject(any(PutObjectRequest.class), any(Path.class))).thenThrow(new RuntimeException("Simulating an exception"));
+
+        // Create a temporary file for testing
+        File tempFile = createTempFile();
+
+        // Call the method to test
+        assertDoesNotThrow(() -> s3Service.uploadToS3("testKey", tempFile));
+
+        // Verify that putObject method was called with the expected parameters
+        verify(s3Client, times(1)).putObject(argThat(request ->
+                "testBucket".equals(request.bucket()) && "testKey".equals(request.key())), any(Path.class));
+
+        // Verify that the temporary file was not deleted in case of an exception
+        verify(tempFile, never()).delete();
+    }
+
+    private File createTempFile() throws IOException {
+        File tempFile = File.createTempFile("test", ".csv");
+        tempFile.deleteOnExit();
+        return tempFile;
+    }
+}
+_------------
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+// ...
+
+@Test
+void generateAndUploadAllCsvFiles_Exception() {
+    // Mock behavior for CompletableFuture that completes exceptionally
+    when(csvGenerator.generateCsvAndUploadToS3Async(anyString()))
+            .thenReturn(CompletableFuture.supplyAsync(() -> {
+                throw new RuntimeException("Simulating an exception");
+            }));
+
+    // Assert that calling generateAndUploadAllCsvFiles() results in a RuntimeException
+    assertThrows(RuntimeException.class, () -> csvGenerationService.generateAndUploadAllCsvFiles());
+
+    // Verify that generateCsvAndUploadToS3Async was called for each TableSqlEnum
+    verify(csvGenerator, times(TableSqlEnum.values().length)).generateCsvAndUploadToS3Async(anyString());
+}
