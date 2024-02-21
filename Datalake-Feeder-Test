@@ -1,0 +1,80 @@
+package com.socgen.gtba.lucidlink.service;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.*;
+
+import java.io.IOException;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+@ContextConfiguration(classes = {DatalakeFeeder.class})
+@ExtendWith(SpringExtension.class)
+class DatalakeFeederTest {
+    @Autowired
+    private DatalakeFeeder datalakeFeeder;
+
+    @MockBean
+    private CsvGenerator csvGenerator;
+
+    @MockBean
+    private CsvUploader csvUploader;
+
+    @Test
+    void test_datalake_feeder_hkg_tables() throws IOException {
+        // Arrange
+        when(csvGenerator.generateCsv(Mockito.anyString())).thenReturn("FHKG_CUSTOMER");
+        doNothing().when(csvUploader).upload(Mockito.anyString(), Mockito.anyString());
+
+        // Act
+        datalakeFeeder.feed("FHKG_CUSTOMER");
+
+        // Assert
+        verify(csvGenerator).generateCsv(Mockito.anyString());
+        verify(csvUploader).upload(Mockito.anyString(), Mockito.anyString());
+    }
+
+    @Test
+    void test_datalake_feeder_sgp_tables() throws IOException {
+        // Arrange
+        when(csvGenerator.generateCsv(anyString())).thenReturn("FSGP_AA_ARRANGEMENT_ACTIVITY");
+        doNothing().when(csvUploader).upload(anyString(), anyString());
+
+        // Act
+        datalakeFeeder.feed("FSGP_AA_ARRANGEMENT_ACTIVITY");
+
+        // Assert
+        verify(csvGenerator).generateCsv(anyString());
+        verify(csvUploader).upload(anyString(), anyString());
+    }
+
+    @Test
+    void test_datalake_feeder_common_tables() throws IOException {
+        // Arrange
+        when(csvGenerator.generateCsv(anyString())).thenReturn("F_DATES");
+        doNothing().when(csvUploader).upload(anyString(), anyString());
+
+        // Act
+        datalakeFeeder.feed("F_DATES");
+
+        // Assert
+        verify(csvGenerator).generateCsv(anyString());
+        verify(csvUploader).upload(anyString(), anyString());
+    }
+    @Test
+    void test_datalake_feeder_exception_for_uploading_tables() throws IOException {
+        // Arrange
+        when(csvGenerator.generateCsv(anyString())).thenReturn("F_DATES");
+        doThrow(new IOException("exception")).when(csvUploader).upload(anyString(), anyString());
+
+        // Act and Assert
+        assertThrows(IOException.class, () -> datalakeFeeder.feed("F_DATES"));
+        verify(csvGenerator).generateCsv(anyString());
+        verify(csvUploader).upload(anyString(), anyString());
+    }
+}
