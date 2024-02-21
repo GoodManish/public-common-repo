@@ -1,0 +1,57 @@
+
+
+import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.nio.file.Path;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.core.env.StandardEnvironment;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
+class DatalakeCallerTest {
+
+    @Test
+    void testCall() throws IOException {
+
+        // Arrange
+        CsvGenerator csvGenerator = mock(CsvGenerator.class);
+        when(csvGenerator.generateCsv(anyString())).thenReturn("Generate Csv");
+        S3Client s3Client = mock(S3Client.class);
+        when(s3Client.putObject(Mockito.<PutObjectRequest>any(), Mockito.<Path>any())).thenReturn(null);
+        StandardEnvironment environment = mock(StandardEnvironment.class);
+        when(environment.getRequiredProperty(Mockito.<String>any())).thenReturn("Required Property");
+
+        // Act
+        (new DatalakeCaller(new DatalakeFeeder(csvGenerator, new CsvUploader(s3Client, environment)))).call();
+
+        // Assert
+        verify(csvGenerator, atLeast(1)).generateCsv(Mockito.anyString());
+        verify(environment).getRequiredProperty(Mockito.anyString());
+        verify(s3Client, atLeast(1)).putObject(Mockito.<PutObjectRequest>any(), Mockito.<Path>any());
+    }
+
+    @Test
+    void testCall2() throws IOException {
+
+        // Arrange
+        CsvGenerator csvGenerator = mock(CsvGenerator.class);
+        when(csvGenerator.generateCsv(Mockito.<String>any())).thenReturn("Generate Csv");
+        CsvUploader csvUploader = mock(CsvUploader.class);
+        doNothing().when(csvUploader).upload(Mockito.<String>any(), Mockito.<String>any());
+
+        // Act
+        (new DatalakeCaller(new DatalakeFeeder(csvGenerator, csvUploader))).call();
+
+        // Assert
+        verify(csvGenerator, atLeast(1)).generateCsv(Mockito.<String>any());
+        verify(csvUploader, atLeast(1)).upload(Mockito.<String>any(), Mockito.<String>any());
+    }
+}
