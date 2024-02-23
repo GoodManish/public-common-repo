@@ -1,7 +1,11 @@
 // SqlConstants.java
+// SqlConstants.java
 public class SqlConstants {
-    public static final String NO_SQL_CONDITION = "your_no_sql_condition";
-    public static final String LIMIT_OFFSET = "your_limit_offset";
+    public static final String BANKING_DT_RECID_CONDITION = " WHERE \"RECID\" LIKE 'HK%' OR \"RECID\" LIKE 'IN%' AND \"BANKING_DATE_TL\" = ";
+    public static final String BANKING_DT_CONDITION = " WHERE \"BANKING_DATE_TL\" = ";
+    public static final String RECID_CONDITION = " WHERE \"RECID\" LIKE 'HK%' OR \"RECID\" LIKE 'IN%'";
+    public static final String NO_CONDITION = "";
+    public static final String LIMIT_OFFSET = " LIMIT ? OFFSET ? ";
 }
 
 
@@ -11,21 +15,23 @@ public class SqlConstants {
 @Slf4j
 public class CsvGenerator {
     private final JdbcTemplate jdbcTemplate;
+    private final QueryHelper queryHelper;
     private static final int PAGE_SIZE = 2;
     private static final String DELIMITER = "{#]";
-    
-    public CsvGenerator(JdbcTemplate jdbcTemplate) {
+
+    public CsvGenerator(JdbcTemplate jdbcTemplate, QueryHelper queryHelper) {
         this.jdbcTemplate = jdbcTemplate;
+        this.queryHelper = queryHelper;
     }
 
     public String generateCsv(String tableName) {
         tableName = tableName.replace("\"", "");
         String csvFileName = tableName + ".csv";
         TableSqlEnum tableEnum = TableSqlEnum.valueOf(tableName);
-        String sqlCondition = tableEnum.getSqlCondition();
+        String sqlCondition = tableEnum.getSqlCondition(queryHelper);
 
         try (Connection connection = jdbcTemplate.getDataSource().getConnection()) {
-            String sql = "SELECT * FROM \"" + tableName + "\"" + sqlCondition + SqlConstants.LIMIT_OFFSET;
+            String sql = "SELECT * FROM \"" + tableName + "\"" + sqlCondition + queryHelper.getLimitOffset();
             PreparedStatement preparedStatement = connection.prepareStatement(sql);
 
             int offset = 0;
@@ -49,16 +55,38 @@ public class CsvGenerator {
 
 
 
-// TableSqlEnum.java
-@Getter
-public enum TableSqlEnum {
-    FHKG_CUSTOMER {
-        @Override
-        public String getSqlCondition() {
-            return SqlConstants.NO_SQL_CONDITION;
-        }
-    },
-    // ... (other enum constants remain unchanged)
 
-    public abstract String getSqlCondition();
+// QueryHelper.java
+@Service
+public class QueryHelper {
+    private final String currentDate;
+
+    public QueryHelper(final Environment environment) {
+        this.currentDate = environment.getRequiredProperty("currentdate");
+    }
+
+    public String getBankingDtRecidSqlCondition() {
+        return SqlConstants.BANKING_DT_RECID_CONDITION + getCurrentDate();
+    }
+
+    public String getBankingDtSqlCondition() {
+        return SqlConstants.BANKING_DT_CONDITION + getCurrentDate();
+    }
+
+    public String getRecidSqlCondition() {
+        return SqlConstants.RECID_CONDITION;
+    }
+
+    public String getNoSqlCondition() {
+        return SqlConstants.NO_CONDITION;
+    }
+
+    public String getLimitOffset() {
+        return SqlConstants.LIMIT_OFFSET;
+    }
+
+    public String getCurrentDate() {
+        return currentDate;
+    }
 }
+
