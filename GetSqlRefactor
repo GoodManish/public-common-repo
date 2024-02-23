@@ -1,0 +1,64 @@
+// SqlConstants.java
+public class SqlConstants {
+    public static final String NO_SQL_CONDITION = "your_no_sql_condition";
+    public static final String LIMIT_OFFSET = "your_limit_offset";
+}
+
+
+
+// CsvGenerator.java
+@Service
+@Slf4j
+public class CsvGenerator {
+    private final JdbcTemplate jdbcTemplate;
+    private static final int PAGE_SIZE = 2;
+    private static final String DELIMITER = "{#]";
+    
+    public CsvGenerator(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    public String generateCsv(String tableName) {
+        tableName = tableName.replace("\"", "");
+        String csvFileName = tableName + ".csv";
+        TableSqlEnum tableEnum = TableSqlEnum.valueOf(tableName);
+        String sqlCondition = tableEnum.getSqlCondition();
+
+        try (Connection connection = jdbcTemplate.getDataSource().getConnection()) {
+            String sql = "SELECT * FROM \"" + tableName + "\"" + sqlCondition + SqlConstants.LIMIT_OFFSET;
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+
+            int offset = 0;
+            try (FileWriter fileWriter = new FileWriter(csvFileName)) {
+                writeCsvHeader(fileWriter, preparedStatement);
+                do {
+                    writeCsvData(fileWriter, preparedStatement, offset);
+                    offset += PAGE_SIZE;
+                } while (hasMoreRows(preparedStatement, offset));
+            }
+            return csvFileName;
+
+        } catch (SQLException | IOException e) {
+            log.error("Error generating CSV file:", e);
+            throw new RuntimeException("CSV generation failed", e);
+        }
+    }
+
+    // ... (remaining methods remain unchanged)
+}
+
+
+
+// TableSqlEnum.java
+@Getter
+public enum TableSqlEnum {
+    FHKG_CUSTOMER {
+        @Override
+        public String getSqlCondition() {
+            return SqlConstants.NO_SQL_CONDITION;
+        }
+    },
+    // ... (other enum constants remain unchanged)
+
+    public abstract String getSqlCondition();
+}
