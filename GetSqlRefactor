@@ -1,14 +1,11 @@
 // SqlConstants.java
-// SqlConstants.java
 public class SqlConstants {
-    public static final String BANKING_DT_RECID_CONDITION = " WHERE \"RECID\" LIKE 'HK%' OR \"RECID\" LIKE 'IN%' AND \"BANKING_DATE_TL\" = ";
-    public static final String BANKING_DT_CONDITION = " WHERE \"BANKING_DATE_TL\" = ";
+    public static final String BANKING_DT_RECID_CONDITION = " WHERE \"RECID\" LIKE 'HK%' OR \"RECID\" LIKE 'IN%' AND \"BANKING_DATE_TL\" < ";
+    public static final String BANKING_DT_CONDITION = " WHERE \"BANKING_DATE_TL\" < ";
     public static final String RECID_CONDITION = " WHERE \"RECID\" LIKE 'HK%' OR \"RECID\" LIKE 'IN%'";
     public static final String NO_CONDITION = "";
     public static final String LIMIT_OFFSET = " LIMIT ? OFFSET ? ";
 }
-
-
 
 // CsvGenerator.java
 @Service
@@ -31,7 +28,7 @@ public class CsvGenerator {
         String sqlCondition = tableEnum.getSqlCondition(queryHelper);
 
         try (Connection connection = jdbcTemplate.getDataSource().getConnection()) {
-            String sql = "SELECT * FROM \"" + tableName + "\"" + sqlCondition + queryHelper.getLimitOffset();
+            String sql = "SELECT * FROM \"" + tableName + "\"" + sqlCondition + SqlConstants.LIMIT_OFFSET;
             PreparedStatement preparedStatement = connection.prepareStatement(sql);
 
             int offset = 0;
@@ -53,8 +50,48 @@ public class CsvGenerator {
     // ... (remaining methods remain unchanged)
 }
 
+// TableSqlEnum.java
+@Getter
+public enum TableSqlEnum {
+    FHKG_CUSTOMER {
+        @Override
+        public String getSqlCondition(QueryHelper queryHelper) {
+            return SqlConstants.BANKING_DT_RECID_CONDITION + queryHelper.getCurrentDate();
+        }
+    },
+    FIND_CUSTOMER {
+        @Override
+        public String getSqlCondition(QueryHelper queryHelper) {
+            return SqlConstants.BANKING_DT_RECID_CONDITION + queryHelper.getCurrentDate();
+        }
+    },
+    FHKG_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE {
+        @Override
+        public String getSqlCondition(QueryHelper queryHelper) {
+            return SqlConstants.BANKING_DT_CONDITION + queryHelper.getCurrentDate();
+        }
+    },
+    FIND_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE {
+        @Override
+        public String getSqlCondition(QueryHelper queryHelper) {
+            return SqlConstants.BANKING_DT_CONDITION + queryHelper.getCurrentDate();
+        }
+    },
+    F_DATES {
+        @Override
+        public String getSqlCondition(QueryHelper queryHelper) {
+            return SqlConstants.RECID_CONDITION;
+        }
+    },
+    F_COMPANY {
+        @Override
+        public String getSqlCondition(QueryHelper queryHelper) {
+            return SqlConstants.NO_CONDITION;
+        }
+    };
 
-
+    public abstract String getSqlCondition(QueryHelper queryHelper);
+}
 
 // QueryHelper.java
 @Service
@@ -65,28 +102,7 @@ public class QueryHelper {
         this.currentDate = environment.getRequiredProperty("currentdate");
     }
 
-    public String getBankingDtRecidSqlCondition() {
-        return SqlConstants.BANKING_DT_RECID_CONDITION + getCurrentDate();
-    }
-
-    public String getBankingDtSqlCondition() {
-        return SqlConstants.BANKING_DT_CONDITION + getCurrentDate();
-    }
-
-    public String getRecidSqlCondition() {
-        return SqlConstants.RECID_CONDITION;
-    }
-
-    public String getNoSqlCondition() {
-        return SqlConstants.NO_CONDITION;
-    }
-
-    public String getLimitOffset() {
-        return SqlConstants.LIMIT_OFFSET;
-    }
-
     public String getCurrentDate() {
         return currentDate;
     }
 }
-
