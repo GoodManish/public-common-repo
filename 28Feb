@@ -1,0 +1,110 @@
+@Getter
+public enum TableSqlEnum {
+   FHKG_CUSTOMER("FHKG_CUSTOMER") {
+        @Override
+        public String getSqlCondition(String currentDate) {
+            return SqlConditionEnum.BANKING_DT_RECID_CONDITION.getCondition() + currentDate;
+        }
+    },
+    FIND_CUSTOMER("FIND_CUSTOMER") {
+        @Override
+        public String getSqlCondition(String currentDate) {
+            return SqlConditionEnum.BANKING_DT_RECID_CONDITION.getCondition() + currentDate;
+        }
+    },
+    FHKG_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE("FHKG_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE") {
+        @Override
+        public String getSqlCondition(String currentDate) {
+            return SqlConditionEnum.BANKING_DT_CONDITION.getCondition() + currentDate;
+        }
+    },
+    FIND_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE("FIND_AA_ARR_PAYMENT_SCHEDULE_PERCENTAGE") {
+        @Override
+        public String getSqlCondition(String currentDate) {
+            return SqlConditionEnum.BANKING_DT_CONDITION.getCondition() + currentDate;
+        }
+    },
+    F_DATES("F_DATES") {
+        @Override
+        public String getSqlCondition(String currentDate) {
+            return SqlConditionEnum.RECID_CONDITION.getCondition();
+        }
+    },
+    F_COMPANY("F_COMPANY") {
+        @Override
+        public String getSqlCondition(String currentDate) {
+            return SqlConditionEnum.NO_CONDITION.getCondition();
+        }
+    },
+    FIND_ACCOUNT_HIS("FIND_ACCOUNT#HIS") {
+        @Override
+        public String getSqlCondition(String currentDate) {
+            return SqlConditionEnum.BANKING_DT_CONDITION.getCondition() + currentDate;
+        }
+    },
+    FHKG_ACCOUNT_HIS("FHKG_ACCOUNT#HIS") {
+        @Override
+        public String getSqlCondition(String currentDate) {
+            return SqlConditionEnum.BANKING_DT_CONDITION.getCondition() + currentDate;
+        }
+    };
+
+    private final String tableName;
+
+    TableSqlEnum(String tableName) {
+        this.tableName = tableName;
+    }
+
+    public static TableSqlEnum getByTableName(String tableName) {
+        for (TableSqlEnum value : values()) {
+            if (value.tableName.equals(tableName)) {
+                return value;
+            }
+        }
+        throw new IllegalArgumentException("No enum constant with tableName: " + tableName);
+    }
+
+    public abstract String getSqlCondition(String currentDate);
+}
+
+------------------------------CsvGeneratore-------------------------------------
+
+    public String generateCsv(String tableName) {
+        tableName = tableName.replace("\"", "");
+        String csvFileName = tableName + CSV;
+        TableSqlEnum tableEnum = TableSqlEnum.getByTableName(tableName);
+        String sqlCondition = tableEnum.getSqlCondition(currentDate);
+
+        try (Connection connection = jdbcTemplate.getDataSource().getConnection()) {
+
+
+---------------DatalakeFeedScheduler-------------------
+@Service
+@Slf4j
+@AllArgsConstructor
+public class DatalakeFeedScheduler {
+
+    private DatalakeFeeder datalakeFeeder;
+
+    public void call() {
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        for (TableSqlEnum table : TableSqlEnum.values()){
+            String tableName = table.getTableName();
+            CompletableFuture<Void> future = datalakeFeeder.feed(tableName);
+            futures.add(future);
+        }
+        CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        allOf.join();
+    }
+}
+
+---------------Util Method ---------
+  public static String getFolderNameFromTableName(String tableName) {
+      // split '#' or '_' and skip the 1st Part
+      String[] parts = tableName.split("[#_]");
+      Stream<String> partsStream = Stream.of(parts).skip(1);
+
+      return partsStream.map(part ->
+                      part.substring(0, 1).toUpperCase() + part.substring(1).toLowerCase())
+              .collect(Collectors.joining());
+  }
