@@ -1,0 +1,163 @@
+package com.socgen.gtba.lucidlink.csv;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.socgen.gtba.lucidlink.exception.CsvDataWriterSQLException;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+@ContextConfiguration(classes = {CsvDataWriter.class})
+@ExtendWith(SpringExtension.class)
+class CsvDataWriterDiffblueTest {
+    @Autowired
+    private CsvDataWriter csvDataWriter;
+
+    /**
+     * Method under test:
+     * {@link CsvDataWriter#writeCsvData(FileWriter, PreparedStatement, int, int)}
+     */
+    @Test
+    void testWriteCsvData() throws IOException, SQLException {
+        // Arrange
+        ResultSetMetaData resultSetMetaData = mock(ResultSetMetaData.class);
+        when(resultSetMetaData.getColumnCount()).thenReturn(3);
+        ResultSet resultSet = mock(ResultSet.class);
+        when(resultSet.getString(anyInt())).thenThrow(new SQLException());
+        when(resultSet.getMetaData()).thenReturn(resultSetMetaData);
+        when(resultSet.next()).thenReturn(true).thenReturn(true).thenReturn(false);
+        doNothing().when(resultSet).close();
+        PreparedStatement preparedStatement = mock(PreparedStatement.class);
+        when(preparedStatement.executeQuery()).thenReturn(resultSet);
+        doNothing().when(preparedStatement).setInt(anyInt(), anyInt());
+
+        // Act and Assert
+        assertThrows(CsvDataWriterSQLException.class, () -> csvDataWriter.writeCsvData(null, preparedStatement, 2, 3));
+        verify(preparedStatement).executeQuery();
+        verify(preparedStatement, atLeast(1)).setInt(anyInt(), anyInt());
+        verify(resultSet).close();
+        verify(resultSet).getMetaData();
+        verify(resultSet).getString(anyInt());
+        verify(resultSet).next();
+        verify(resultSetMetaData).getColumnCount();
+    }
+
+    /**
+     * Method under test:
+     * {@link CsvDataWriter#writeCsvData(FileWriter, PreparedStatement, int, int)}
+     */
+    @Test
+    void testWriteCsvData2() throws IOException, SQLException {
+        // Arrange
+        ResultSet resultSet = mock(ResultSet.class);
+        when(resultSet.next()).thenReturn(false).thenReturn(true).thenReturn(false);
+        doNothing().when(resultSet).close();
+        PreparedStatement preparedStatement = mock(PreparedStatement.class);
+        when(preparedStatement.executeQuery()).thenReturn(resultSet);
+        doNothing().when(preparedStatement).setInt(anyInt(), anyInt());
+
+        // Act
+        csvDataWriter.writeCsvData(null, preparedStatement, 2, 3);
+
+        // Assert that nothing has changed
+        verify(preparedStatement).executeQuery();
+        verify(preparedStatement, atLeast(1)).setInt(anyInt(), anyInt());
+        verify(resultSet).close();
+        verify(resultSet).next();
+    }
+}
+---------------------------------------------------------------
+
+
+
+import com.socgen.gtba.lucidlink.csv.CsvHeaderWriter;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.io.FileWriter;
+import java.sql.PreparedStatement;
+import java.sql.ResultSetMetaData;
+
+import static org.mockito.Mockito.*;
+
+class CsvHeaderWriterTest {
+
+    @Mock
+    private FileWriter fileWriter;
+
+    @Mock
+    private PreparedStatement preparedStatement;
+
+    @Test
+    void writeCsvHeader() throws Exception {
+        // Initialize mocks
+        MockitoAnnotations.initMocks(this);
+
+        // Set up ResultSetMetaData with desired column count
+        ResultSetMetaData metaData = mock(ResultSetMetaData.class);
+        when(metaData.getColumnCount()).thenReturn(3); // Set your desired column count
+
+        // Set up the behavior of the PreparedStatement
+        when(preparedStatement.getMetaData()).thenReturn(metaData);
+
+        // Create CsvHeaderWriter instance
+        CsvHeaderWriter csvHeaderWriter = new CsvHeaderWriter();
+
+        // Call the method to test
+        csvHeaderWriter.writeCsvHeader(fileWriter, preparedStatement);
+
+        // Verify that FileWriter methods were called as expected
+        verify(fileWriter, times(1)).append(System.lineSeparator());
+        verify(fileWriter, times(1)).flush();
+
+        // Additional assertions based on your specific requirements
+    }
+}
+
+-----------------DatalakeFeeder-Negative-testcase---------------------
+
+    @Test
+    void testFeed_IOExceptionThrown() {
+        // Arrange
+        when(csvGenerator.generateCsv(Mockito.<String>any())).thenThrow(new RuntimeException("Test IO Exception"));
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () ->
+                datalakeFeeder.feed("Table Name"));
+        
+        // Verify
+        verify(csvGenerator).generateCsv(Mockito.<String>any());
+        verifyNoMoreInteractions(csvUploader);
+    }
+
+    @Test
+    void testFeed_UploaderThrowsException() throws IOException {
+        // Arrange
+        when(csvGenerator.generateCsv(Mockito.<String>any())).thenReturn("Generate Csv");
+        doThrow(new RuntimeException("Test Upload Exception")).when(csvUploader).upload(Mockito.<String>any(), Mockito.<String>any());
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () ->
+                datalakeFeeder.feed("Table Name"));
+
+        // Verify
+        verify(csvGenerator).generateCsv(Mockito.<String>any());
+        verify(csvUploader).upload(Mockito.<String>any(), Mockito.<String>any());
+    }
