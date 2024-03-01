@@ -1,0 +1,68 @@
+
+import com.socgen.gtba.lucidlink.exception.CsvDataWriterSQLException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.*;
+
+class CsvDataWriterTest {
+    private CsvDataWriter csvDataWriter;
+
+    @BeforeEach
+    void setUp() {
+        csvDataWriter = new CsvDataWriter();
+    }
+
+    @Test
+    void test_should_throw_csv_writer_sql_exception() throws IOException, SQLException {
+        // Arrange
+        ResultSetMetaData resultSetMetaData = mock(ResultSetMetaData.class);
+        when(resultSetMetaData.getColumnCount()).thenReturn(3);
+        ResultSet resultSet = mock(ResultSet.class);
+        when(resultSet.getString(anyInt())).thenThrow(new SQLException());
+        when(resultSet.getMetaData()).thenReturn(resultSetMetaData);
+        when(resultSet.next()).thenReturn(true).thenReturn(true).thenReturn(false);
+        doNothing().when(resultSet).close();
+        PreparedStatement preparedStatement = mock(PreparedStatement.class);
+        when(preparedStatement.executeQuery()).thenReturn(resultSet);
+        doNothing().when(preparedStatement).setInt(anyInt(), anyInt());
+
+        // Act and Assert
+        assertThrows(CsvDataWriterSQLException.class, () -> csvDataWriter.writeCsvData(null, preparedStatement, 2, 3));
+        verify(preparedStatement).executeQuery();
+        verify(preparedStatement, atLeast(1)).setInt(anyInt(), anyInt());
+        verify(resultSet).close();
+        verify(resultSet).getMetaData();
+        verify(resultSet).getString(anyInt());
+        verify(resultSet).next();
+        verify(resultSetMetaData).getColumnCount();
+    }
+
+    @Test
+    void test_when_result_set_is_empty() throws IOException, SQLException {
+        // Arrange
+        ResultSet resultSet = mock(ResultSet.class);
+        when(resultSet.next()).thenReturn(false).thenReturn(true).thenReturn(false);
+        doNothing().when(resultSet).close();
+        PreparedStatement preparedStatement = mock(PreparedStatement.class);
+        when(preparedStatement.executeQuery()).thenReturn(resultSet);
+        doNothing().when(preparedStatement).setInt(anyInt(), anyInt());
+
+        // Act
+        csvDataWriter.writeCsvData(null, preparedStatement, 2, 3);
+
+        // Assert
+        verify(preparedStatement).executeQuery();
+        verify(preparedStatement, atLeast(1)).setInt(anyInt(), anyInt());
+        verify(resultSet).close();
+        verify(resultSet).next();
+    }
+}
