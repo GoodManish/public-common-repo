@@ -1,0 +1,326 @@
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.*;
+
+import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+
+class DatalakeFeederTest {
+
+    @Mock
+    private CsvGenerator csvGenerator;
+
+    @Mock
+    private CsvUploader csvUploader;
+
+    private DatalakeFeeder datalakeFeeder;
+
+    public DatalakeFeederTest() {
+        MockitoAnnotations.initMocks(this);
+        datalakeFeeder = new DatalakeFeeder(csvGenerator, csvUploader);
+    }
+
+    @Test
+    public void testFeedSuccess() throws IOException {
+        String tableName = "testTable";
+        String csvFileName = "test.csv";
+
+        Mockito.when(csvGenerator.generateCsv(tableName)).thenReturn(csvFileName);
+
+        CompletableFuture<Void> result = datalakeFeeder.feed(tableName);
+
+        Mockito.verify(csvGenerator).generateCsv(tableName);
+        Mockito.verify(csvUploader).upload(csvFileName, tableName);
+        Mockito.verifyNoMoreInteractions(csvGenerator, csvUploader);
+
+        result.join(); // Ensure the CompletableFuture completes successfully
+    }
+
+    @Test //not working
+    public void testFeedFailure() throws IOException {
+        String tableName = "testTable";
+        IOException exception = new IOException("Mock IO Exception");
+
+        Mockito.doThrow(exception).when(csvGenerator).generateCsv(tableName);
+
+        CompletableFuture<Void> result = datalakeFeeder.feed(tableName);
+
+        Mockito.verify(csvGenerator).generateCsv(tableName);
+        Mockito.verifyNoMoreInteractions(csvGenerator, csvUploader);
+        // Verify that the error message is logged
+    }
+}
+
+_______________________________________
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class DatalakeFeederTest {
+
+    @Mock
+    private CsvGenerator csvGenerator;
+    @Mock
+    private CsvUploader csvUploader;
+
+    @InjectMocks
+    private DatalakeFeeder datalakeFeeder;
+
+    @Test
+    void testFeed() throws IOException {
+        // Arrange
+        String tableName = "testTable";
+        String csvFileName = "testFile.csv";
+
+        when(csvGenerator.generateCsv(tableName)).thenReturn(csvFileName);
+
+        // Act
+        CompletableFuture<Void> result = datalakeFeeder.feed(tableName);
+
+        // Assert
+        assertTrue(result.isDone()); // Ensure CompletableFuture is completed
+
+        // Verify interactions
+        verify(csvGenerator).generateCsv(tableName);
+        verify(csvUploader).upload(csvFileName, tableName);
+        verifyNoMoreInteractions(csvGenerator, csvUploader);
+    }
+
+    @Test
+    void testFeed_CsvGeneratorThrowsIOException() throws IOException {
+        // Arrange
+        String tableName = "testTable";
+
+        when(csvGenerator.generateCsv(tableName)).thenThrow(new IOException("Test IOException"));
+
+        // Act
+        CompletableFuture<Void> result = datalakeFeeder.feed(tableName);
+
+        // Assert
+        assertTrue(result.isCompletedExceptionally()); // Ensure CompletableFuture completed exceptionally
+
+        // Verify interactions
+        verify(csvGenerator).generateCsv(tableName);
+        verifyNoInteractions(csvUploader);
+    }
+
+    @Test //NOt working
+    void testFeed_CsvUploaderThrowsIOException() throws IOException {
+        // Arrange
+        String tableName = "testTable";
+        String csvFileName = "testFile.csv";
+
+        when(csvGenerator.generateCsv(tableName)).thenReturn(csvFileName);
+        doThrow(new IOException("Test IOException")).when(csvUploader).upload(csvFileName, tableName);
+
+        // Act
+        CompletableFuture<Void> result = datalakeFeeder.feed(tableName);
+
+        // Assert
+        assertTrue(result.isCompletedExceptionally()); // Ensure CompletableFuture completed exceptionally
+
+        // Verify interactions
+        verify(csvGenerator).generateCsv(tableName);
+        verify(csvUploader).upload(csvFileName, tableName);
+        verifyNoMoreInteractions(csvGenerator, csvUploader);
+    }
+}
+
+-----------------------------------------------
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class DatalakeFeederTest {
+
+    @Mock
+    private CsvGenerator csvGenerator;
+    @Mock
+    private CsvUploader csvUploader;
+
+    @InjectMocks
+    private DatalakeFeeder datalakeFeeder;
+
+    @Test
+    void testFeed() throws Exception {
+        // Setup
+        when(csvGenerator.generateCsv("tableName")).thenReturn("csvFileName");
+
+        // Run the test
+        final CompletableFuture<Void> result = datalakeFeeder.feed("tableName");
+
+        // Verify the results
+        verify(csvUploader).upload("csvFileName", "tableName");
+
+        // Assertions
+//        result.join(); // Ensure the CompletableFuture is completed
+        verifyNoMoreInteractions(csvUploader); // Verify no other interactions
+    }
+
+    @Test
+    void testFeed_CsvGeneratorThrowsIOException() throws IOException {
+        // Setup
+        when(csvGenerator.generateCsv("tableName")).thenThrow(new IOException("Test IOException"));
+
+        // Run the test
+        final CompletableFuture<Void> result = datalakeFeeder.feed("tableName");
+
+        // Assertions
+        verifyNoInteractions(csvUploader); // Ensure no interactions with CsvUploader
+        assertTrue(result.isCompletedExceptionally()); // Verify that the CompletableFuture completed exceptionally
+    }
+
+    @Test // Not Working
+    void testFeed_CsvUploaderThrowsIOException() throws IOException {
+        // Setup
+        when(csvGenerator.generateCsv("tableName")).thenReturn("csvFileName");
+        doThrow(new IOException("Test IOException")).when(csvUploader).upload("csvFileName", "tableName");
+
+        // Run the test
+        final CompletableFuture<Void> result = datalakeFeeder.feed("tableName");
+
+        // Assertions
+        assertTrue(result.isCompletedExceptionally()); // Verify that the CompletableFuture completed exceptionally
+    }
+}
+
+----------------------------------------------------
+
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.*;
+
+import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+
+class DatalakeFeederTest {
+
+    @Mock
+    private CsvGenerator csvGenerator;
+
+    @Mock
+    private CsvUploader csvUploader;
+
+    private DatalakeFeeder datalakeFeeder;
+
+    public DatalakeFeederTest() {
+        MockitoAnnotations.initMocks(this);
+        datalakeFeeder = new DatalakeFeeder(csvGenerator, csvUploader);
+    }
+
+    @Test
+    public void testFeedSuccess() throws IOException {
+        String tableName = "testTable";
+        String csvFileName = "test.csv";
+
+        Mockito.when(csvGenerator.generateCsv(tableName)).thenReturn(csvFileName);
+
+        CompletableFuture<Void> result = datalakeFeeder.feed(tableName);
+
+        Mockito.verify(csvGenerator).generateCsv(tableName);
+        Mockito.verify(csvUploader).upload(csvFileName, tableName);
+        Mockito.verifyNoMoreInteractions(csvGenerator, csvUploader);
+
+        result.join(); // Ensure the CompletableFuture completes successfully
+    }
+
+    @Test // Not working
+    public void testFeedFailure() throws IOException {
+        String tableName = "testTable";
+        IOException exception = new IOException("Mock IO Exception");
+
+        Mockito.doThrow(exception).when(csvGenerator).generateCsv(tableName);
+
+        CompletableFuture<Void> result = datalakeFeeder.feed(tableName);
+
+        Mockito.verify(csvGenerator).generateCsv(tableName);
+        Mockito.verifyNoMoreInteractions(csvGenerator, csvUploader);
+        // Verify that the error message is logged
+    }
+}
+------------------------------------------------------------
+
+@ExtendWith(MockitoExtension.class)
+class DatalakeFeederTest {
+
+    @Mock
+    private CsvGenerator csvGenerator;
+    @Mock
+    private CsvUploader csvUploader;
+
+    private DatalakeFeeder datalakeFeeder;
+
+    @BeforeEach
+    void setUp() {
+        datalakeFeeder = new DatalakeFeeder(csvGenerator, csvUploader);
+    }
+
+    @Test
+    void testFeed() throws Exception {
+        // Setup
+        when(csvGenerator.generateCsv("tableName")).thenReturn("csvFileName");
+
+        // Run the test
+        final CompletableFuture<Void> result = datalakeFeeder.feed("tableName");
+
+        // Verify the results
+        verify(csvUploader).upload("csvFileName", "tableName");
+    }
+
+    @Test
+    void testFeed_CsvUploaderThrowsIOException() throws IOException {
+        // Setup
+        when(csvGenerator.generateCsv("tableName")).thenReturn("csvFileName");
+        doThrow(new IOException("Test IOException")).when(csvUploader).upload("csvFileName", "tableName");
+
+        // Run the test
+        final CompletableFuture<Void> result = datalakeFeeder.feed("tableName");
+
+        // Assertions
+        assertTrue(result.isCompletedExceptionally()); // Verify that the CompletableFuture completed exceptionally
+    }
+
+}
