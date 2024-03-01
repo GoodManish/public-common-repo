@@ -1,0 +1,4 @@
+Description
+
+Transact system needs to feed data to various downstream reporting tools(vai Datalake), which needs to be done for different interfaces such as Fatca/CRS, Garliq, Liquidity, and others. Also, in the future, all reporting engines should get feed from Datalake. 
+The lucid team needs to do the data normalization before sharing them with the different interfaces.
