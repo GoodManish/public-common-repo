@@ -66,3 +66,46 @@ class CsvDataWriterTest {
         verify(resultSet).next();
     }
 }
+-----------------------------------------------------------------------
+
+@ExtendWith(MockitoExtension.class)
+class DatalakeFeederTest {
+
+    @Mock
+    private CsvGenerator csvGenerator;
+    @Mock
+    private CsvUploader csvUploader;
+
+    private DatalakeFeeder datalakeFeeder;
+
+    @BeforeEach
+    void setUp() {
+        datalakeFeeder = new DatalakeFeeder(csvGenerator, csvUploader);
+    }
+
+    @Test
+    void testFeed() throws Exception {
+        // Setup
+        when(csvGenerator.generateCsv("tableName")).thenReturn("csvFileName");
+
+        // Run the test
+        final CompletableFuture<Void> result = datalakeFeeder.feed("tableName");
+
+        // Verify the results
+        verify(csvUploader).upload("csvFileName", "tableName");
+    }
+
+    @Test
+    void testFeed_CsvUploaderThrowsIOException() throws IOException {
+        // Setup
+        when(csvGenerator.generateCsv("tableName")).thenReturn("csvFileName");
+        doThrow(new IOException("Test IOException")).when(csvUploader).upload("csvFileName", "tableName");
+
+        // Run the test
+        final CompletableFuture<Void> result = datalakeFeeder.feed("tableName");
+
+        // Assertions
+        assertTrue(result.isCompletedExceptionally()); // Verify that the CompletableFuture completed exceptionally
+    }
+
+}
