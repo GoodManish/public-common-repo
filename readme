@@ -1,0 +1,2 @@
+
+The Datalake Feeder application has the job of getting data from the Transact system and moving it to the Datalake. It plays an important role in providing data to various downstream reporting tools through the Datalake, supporting different interfaces like Fatca/CRS, Garliq, Liquidity, and more. Additionally, there is a future requirement for all reporting engines to only receive data feeds from the Datalake. The Lucid team is responsible for doing data normalization as a first step before distributing the data to the different interfaces.
