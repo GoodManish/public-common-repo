@@ -24,4 +24,19 @@ class TableSqlEnumTest {
         assertEquals(expectedSqlCondition.trim(), sqlCondition.trim());
     }
 
+    // Provide a method that returns Stream<TableSqlEnum> for testing
+    static Stream<TableSqlEnum> provideTableEnumsWithNoCondition() {
+        return Stream.of(TableSqlEnum.F_COMPANY, TableSqlEnum.F_COMPANY, TableSqlEnum.F_COMPANY);
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideTableEnumsWithNoCondition")
+    void getSqlCondition_forNoCondition_shouldReturnEmptyString(TableSqlEnum tableEnum) {
+        // Act
+        String sqlCondition = tableEnum.getSqlCondition("2022-01-01");
+
+        // Assert
+        Assertions.assertEquals("", sqlCondition);
+    }
+
 }
