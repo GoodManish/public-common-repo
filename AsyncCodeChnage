@@ -1,0 +1,12 @@
+    @Async("asyncTaskExecutor")
+    public CompletableFuture<Void> feed(String tableName) {
+        return CompletableFuture.supplyAsync(() -> csvGenerator.generateCsv(tableName))
+                .thenCompose(csvFileName -> CompletableFuture.runAsync(() -> {
+                    try {
+                        csvUploader.upload(csvFileName, tableName);
+                    } catch (IOException e) {
+                        log.error("Error during datalake feed for table {}: {}", tableName, e.getMessage());
+                        throw new CompletionException(e);
+                    }
+                }));
+    }
