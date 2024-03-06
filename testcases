@@ -1,0 +1,46 @@
+    @Test //passed
+    void testFeed_RuntimeExceptionDuringFeed1212() throws IOException {
+        // Arrange
+        when(csvGenerator.generateCsv(anyString())).thenReturn("TestTable.csv");
+        doThrow(new RuntimeException("Test RuntimeException")).when(csvUploader).upload(anyString(), anyString());
+
+        // Act and Assert
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> datalakeFeeder.feed("TestTable").join());
+
+        assertEquals("Test RuntimeException", exception.getMessage());
+        verify(csvGenerator).generateCsv("TestTable");
+        verify(csvUploader).upload("TestTable.csv", "TestTable");
+        verifyNoMoreInteractions(csvGenerator, csvUploader);
+    }
+
+    @Test //passed
+    void testFeed_CustomExceptionDuringFeed() throws IOException {
+        // Arrange
+        when(csvGenerator.generateCsv(anyString())).thenReturn("TestTable.csv");
+        doThrow(new DatalakeFeederException("Test DatalakeFeederException", new IOException())).when(csvUploader).upload(anyString(), anyString());
+
+        // Act and Assert
+        DatalakeFeederException exception = assertThrows(DatalakeFeederException.class, () -> datalakeFeeder.feed("TestTable").join());
+
+        assertEquals("Test DatalakeFeederException", exception.getMessage());
+        verify(csvGenerator).generateCsv("TestTable");
+        verify(csvUploader).upload("TestTable.csv", "TestTable");
+        verifyNoMoreInteractions(csvGenerator, csvUploader);
+    }
+
+    @Test //Passed
+    void testFeed_SuccessfulFeed() throws IOException {
+        // Arrange
+        String csvFileName = "TestTable.csv";
+
+        when(csvGenerator.generateCsv(anyString())).thenReturn(csvFileName);
+
+        // Act
+        CompletableFuture<Void> result = datalakeFeeder.feed("TestTable");
+
+        // Assert
+        assertFalse(result.isCompletedExceptionally());
+        verify(csvGenerator).generateCsv("TestTable");
+        verify(csvUploader).upload(csvFileName, "TestTable");
+        verifyNoMoreInteractions(csvGenerator, csvUploader);
+    }
