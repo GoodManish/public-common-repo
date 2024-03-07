@@ -1,0 +1,72 @@
+class Datalake1FeederTest {
+
+    @Mock
+    private CsvGenerator csvGenerator;
+
+    @Mock
+    private CsvUploader csvUploader;
+
+    private final DatalakeFeeder datalakeFeeder;
+
+    DatalakeFeederTest() {
+        MockitoAnnotations.openMocks(this);
+        datalakeFeeder = new DatalakeFeeder(csvGenerator, csvUploader);
+    }
+
+    String F_DATES = "F_DATES";
+    String FHKG_CUSTOMER = "F_CUSTOMER";
+    String FSGP_AA_ARRANGEMENT_ACTIVITY = "FSGP_AA_ARRANGEMENT_ACTIVITY";
+    String CSV = ".csv";
+
+    @Test
+    void test_datalake_feeder_successful_execution() throws Exception {
+        // Arrange
+        String tableName = "testTable";
+        String csvFileName = "testTable.csv";
+
+        when(csvGenerator.generateCsv(tableName)).thenReturn(csvFileName);
+
+        // Act
+        CompletableFuture<Void> result = datalakeFeeder.feed(tableName);
+
+        // Assert
+        result.get(); // Wait for completion
+        verify(csvGenerator).generateCsv(tableName);
+        verify(csvUploader).upload(csvFileName, tableName);
+        verifyNoMoreInteractions(csvGenerator, csvUploader);
+    }
+
+    @Test
+    void test_datalake_feeder_exception_during_csv_generation() throws Exception {
+        // Arrange
+        String tableName = "testTable";
+        when(csvGenerator.generateCsv(tableName)).thenThrow(new RuntimeException("Test Exception"));
+
+        // Act & Assert
+        try {
+            datalakeFeeder.feed(tableName).get();
+            fail("Expected an exception to be thrown"); // If no exception is thrown, fail the test
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause instanceof RuntimeException, "Unexpected exception type");
+        }
+
+        verify(csvGenerator).generateCsv(tableName);
+        verifyNoMoreInteractions(csvUploader);
+    }
+
+    @Test
+    void test_datalake_feeder_exception_during_upload() throws Exception {
+        // Arrange
+        String tableName = "testTable";
+        String csvFileName = "testTable.csv";
+        when(csvGenerator.generateCsv(tableName)).thenReturn(csvFileName);
+        doThrow(new IOException("Test IO Exception")).when(csvUploader).upload(csvFileName, tableName);
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> datalakeFeeder.feed(tableName));
+        verify(csvGenerator).generateCsv(tableName);
+        verify(csvUploader).upload(csvFileName, tableName);
+        verifyNoMoreInteractions(csvGenerator, csvUploader);
+    }
+}
