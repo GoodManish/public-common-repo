@@ -1,0 +1,83 @@
+//With access issue
+    public String generateCsv(String tableName) {
+        tableName = tableName.replace("\"", "");
+        String csvFileName = tableName + CSV;
+        TableSqlEnum tableEnum = TableSqlEnum.getByTableName(tableName);
+        String sqlCondition = tableEnum.getSqlCondition(currentDate);
+
+        String sql = "SELECT * FROM \"" + tableName + "\"" + sqlCondition + LIMIT_OFFSET_SQL_CONDITION;
+
+        try {
+            Path tempFile = Files.createTempFile("temp_", ".csv");
+            try (FileWriter fileWriter = new FileWriter(tempFile.toFile())) {
+                try (Connection connection = jdbcTemplate.getDataSource().getConnection();
+                     PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+                    int offset = 0;
+                    csvHeaderWriter.writeCsvHeader(fileWriter, preparedStatement);
+                    do {
+                        csvDataWriter.writeCsvData(fileWriter, preparedStatement, offset, pageSize);
+                        offset += pageSize;
+                    } while (hasMoreRows(preparedStatement, offset));
+                }
+
+                // Move the temporary file to the final destination
+                Path finalPath = Paths.get(csvFileName);
+                Files.move(tempFile, finalPath, StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            return csvFileName;
+
+        } catch (SQLException e) {
+            log.error("Error generating CSV file for table {}: {}", tableName, e.getMessage());
+            throw new CsvGeneratorSQLException("CSV generation failed", e);
+        } catch (IOException e) {
+            log.error("Error generating CSV file for table {}: {}", tableName, e.getMessage());
+            throw new CsvGeneratorIOException("CSV generation failed", e);
+        }
+    }
+
+
+
+
+--------------Looks working with Synchronised-------------------
+public String generateCsv(String tableName) {
+    tableName = tableName.replace("\"", "");
+    String csvFileName = tableName + CSV;
+    TableSqlEnum tableEnum = TableSqlEnum.getByTableName(tableName);
+    String sqlCondition = tableEnum.getSqlCondition(currentDate);
+
+    String sql = "SELECT * FROM \"" + tableName + "\"" + sqlCondition + LIMIT_OFFSET_SQL_CONDITION;
+
+    try {
+        // Use unique temporary file names for each thread
+        Path tempFile = Files.createTempFile("temp_" + Thread.currentThread().getId() + "_", ".csv");
+
+        // Synchronize access to FileWriter
+        synchronized (this) {
+            try (FileWriter fileWriter = new FileWriter(tempFile.toFile())) {
+                try (Connection connection = jdbcTemplate.getDataSource().getConnection();
+                     PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+                    int offset = 0;
+                    csvHeaderWriter.writeCsvHeader(fileWriter, preparedStatement);
+                    do {
+                        csvDataWriter.writeCsvData(fileWriter, preparedStatement, offset, pageSize);
+                        offset += pageSize;
+                    } while (hasMoreRows(preparedStatement, offset));
+                }
+            }
+        }
+
+        // Move the temporary file to the final destination
+        Path finalPath = Paths.get(csvFileName);
+        Files.move(tempFile, finalPath, StandardCopyOption.REPLACE_EXISTING);
+
+        return csvFileName;
+
+    } catch (SQLException e) {
+        log.error("Error generating CSV file for table {}: {}", tableName, e.getMessage());
+        throw new CsvGeneratorSQLException("CSV generation failed", e);
+    } catch (IOException e) {
+        log.error("Error generating CSV file for table {}: {}", tableName, e.getMessage());
+        throw new CsvGeneratorIOException("CSV generation failed", e);
+    }
+}
