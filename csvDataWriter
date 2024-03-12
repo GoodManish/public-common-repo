@@ -1,0 +1,99 @@
+
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+
+import com.socgen.gtba.lucidlink.csv.CsvDataWriter;
+import com.socgen.gtba.lucidlink.exception.CsvDataWriterIOException;
+import com.socgen.gtba.lucidlink.exception.CsvDataWriterSQLException;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+@ExtendWith(MockitoExtension.class)
+class CsvDataWriterTest {
+
+    @Mock
+    private FileWriter fileWriter;
+
+    @Mock
+    private PreparedStatement preparedStatement;
+
+    @InjectMocks
+    private CsvDataWriter csvDataWriter;
+
+    @Test
+    void testWriteCsvData() throws SQLException, IOException {
+        // Mock ResultSet
+        ResultSet resultSet = mock(ResultSet.class);
+        ResultSetMetaData resultSetMetaData = mock(ResultSetMetaData.class);
+
+        // Mock resultSet behavior
+        when(preparedStatement.executeQuery()).thenReturn(resultSet);
+        when(resultSet.getMetaData()).thenReturn(resultSetMetaData);
+        when(resultSet.next()).thenReturn(true).thenReturn(false);
+        when(resultSetMetaData.getColumnCount()).thenReturn(3);
+        when(resultSet.getString(1)).thenReturn("HK909");
+        when(resultSet.getString(2)).thenReturn("MNEMONIC1");
+        when(resultSet.getString(3)).thenReturn("2023-07-17");
+
+        // Call the method
+        csvDataWriter.writeCsvData(fileWriter, preparedStatement, 0, 10);
+
+        // Verify interactions
+        verify(preparedStatement).setInt(1, 10);
+        verify(preparedStatement).setInt(2, 0);
+
+        // Adjust the custom delimiter to match your actual implementation
+        String customDelimiter = "{#]";
+
+        // Verify content ends with the expected string
+        verify(fileWriter).append(endsWith("HK909" + customDelimiter + "MNEMONIC1" + customDelimiter + "2023-07-17"));
+        verify(fileWriter).flush();
+    }
+
+//-------------------
+
+    @Test
+    void testWriteCsvDataSQLException() throws SQLException, IOException {
+        when(preparedStatement.executeQuery()).thenThrow(new SQLException("Simulated SQL exception"));
+
+        // Call the method and assert exception
+        CsvDataWriterSQLException exception = assertThrows(CsvDataWriterSQLException.class,
+                () -> csvDataWriter.writeCsvData(fileWriter, preparedStatement, 0, 10));
+        assertEquals("Failed to write CSV data", exception.getMessage());
+        assertTrue(exception.getCause() instanceof SQLException);
+
+        // Verify interactions
+        verify(preparedStatement).setInt(1, 10);
+        verify(preparedStatement).setInt(2, 0);
+        verify(fileWriter, never()).append(any());
+        verify(fileWriter, never()).flush();
+    }
+
+    @Test
+    void testWriteCsvDataIOException() throws SQLException, IOException {
+        when(preparedStatement.executeQuery()).thenReturn(mock(ResultSet.class));
+        doThrow(new IOException("Simulated IO exception")).when(fileWriter).flush();
+
+        // Call the method and assert exception
+        CsvDataWriterIOException exception = assertThrows(CsvDataWriterIOException.class,
+                () -> csvDataWriter.writeCsvData(fileWriter, preparedStatement, 0, 10));
+        assertEquals("Failed to write CSV data", exception.getMessage());
+        assertTrue(exception.getCause() instanceof IOException);
+
+        // Verify interactions
+        verify(preparedStatement).setInt(1, 10);
+        verify(preparedStatement).setInt(2, 0);
+        verify(fileWriter, never()).append(any());
+        verify(fileWriter).flush();
+    }
+}
