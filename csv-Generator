@@ -1,0 +1,129 @@
+package com.socgen.gtba.lucidlink.config;
+
+import com.socgen.gtba.lucidlink.csv.CsvDataWriter;
+import com.socgen.gtba.lucidlink.csv.CsvGenerator;
+import com.socgen.gtba.lucidlink.csv.CsvHeaderWriter;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.env.Environment;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import javax.sql.DataSource;
+import java.io.FileWriter;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static java.lang.System.lineSeparator;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class CsvGeneratorTest {
+
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private Environment environment;
+
+    @Mock
+    private CsvHeaderWriter csvHeaderWriter;
+
+    @Mock
+    private CsvDataWriter csvDataWriter;
+
+    @InjectMocks
+    private CsvGenerator csvGenerator;
+
+//    @BeforeEach
+//    void setUp() {
+//        MockitoAnnotations.openMocks(this);
+//    }
+
+    @Test
+    void testGenerateCsv() throws Exception {
+        // Mocking environment properties
+        when(environment.getRequiredProperty("pagesize", Integer.class)).thenReturn(10);
+        when(environment.getRequiredProperty("currentdate")).thenReturn("2024-03-12");
+
+        // Mocking jdbcTemplate behavior
+        DataSource dataSourceMock = mock(DataSource.class);
+        when(jdbcTemplate.getDataSource()).thenReturn(dataSourceMock);
+
+        Connection connectionMock = mock(Connection.class);
+        when(dataSourceMock.getConnection()).thenReturn(connectionMock);
+
+        PreparedStatement preparedStatementMock = mock(PreparedStatement.class);
+        when(connectionMock.prepareStatement(anyString())).thenReturn(preparedStatementMock);
+
+        ResultSet resultSetMock = mock(ResultSet.class);
+        when(resultSetMock.next()).thenReturn(true, false);
+        when(preparedStatementMock.executeQuery()).thenReturn(resultSetMock);
+
+        // Mocking CsvHeaderWriter and CsvDataWriter behavior
+        doNothing().when(csvHeaderWriter).writeCsvHeader(any(FileWriter.class), any(PreparedStatement.class));
+
+        // Mocking CsvDataWriter behavior
+        AtomicInteger recursionCounter = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            FileWriter fileWriter = invocation.getArgument(0);
+            PreparedStatement stmt = invocation.getArgument(1);
+            int offset = invocation.getArgument(2);
+            Integer pageSize = invocation.getArgument(3);
+
+            if (recursionCounter.get() < 10) { // Adjust the limit as needed
+                // Your logic for writing CSV data
+                if (pageSize == null) {
+                    // Handle null pageSize
+                    // You can choose to write some default data or perform custom behavior
+                    fileWriter.append("Default data when pageSize is null");
+                    fileWriter.append(lineSeparator());
+                    fileWriter.flush();
+                } else {
+                    // Increment the counter to avoid infinite recursion
+                    recursionCounter.incrementAndGet();
+                    try {
+                        // Your actual behavior when pageSize is not null
+                        csvDataWriter.writeCsvData(fileWriter, stmt, offset, pageSize);
+                    } finally {
+                        // Decrement the counter after the call to avoid affecting subsequent invocations
+                        recursionCounter.decrementAndGet();
+                    }
+                }
+            } else {
+                // Prevent further recursion to avoid StackOverflowError
+                fileWriter.append("Recursion limit reached");
+                fileWriter.append(lineSeparator());
+                fileWriter.flush();
+            }
+
+            return null;
+        }).when(csvDataWriter).writeCsvData(any(FileWriter.class), any(PreparedStatement.class), anyInt(), anyInt());
+
+        // Instantiate CsvGenerator with the mocked dependencies
+        CsvGenerator csvGenerator = new CsvGenerator(jdbcTemplate, environment, csvHeaderWriter, csvDataWriter);
+
+        // Call the method to be tested
+        String tableName = "FHKG_CUSTOMER";
+        csvGenerator.generateCsv(tableName);
+
+        // Verify interactions
+//        verify(environment, times(1)).getRequiredProperty("pagesize", Integer.class);
+        verify(jdbcTemplate, times(1)).getDataSource();
+        verify(dataSourceMock, times(1)).getConnection();
+        verify(connectionMock, times(1)).prepareStatement(anyString());
+        verify(environment, atLeastOnce()).getRequiredProperty(anyString());
+//        verify(preparedStatementMock, times(2)).setInt(anyInt(), anyInt());
+        verify(preparedStatementMock, times(2)).executeQuery();
+        verify(resultSetMock, times(2)).next();
+        verify(csvHeaderWriter, atLeastOnce()).writeCsvHeader(any(FileWriter.class), any(PreparedStatement.class));
+        verify(csvDataWriter, atLeastOnce()).writeCsvData(any(FileWriter.class), any(PreparedStatement.class), anyInt(), anyInt());
+
+    }
+}
