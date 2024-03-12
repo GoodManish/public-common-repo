@@ -1,0 +1,44 @@
+import com.socgen.gtba.lucidlink.datalake.DatalakeFeedScheduler;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class CsvExportRunnerTest {
+
+    @Mock
+    private DatalakeFeedScheduler datalakeFeedScheduler;
+
+    @InjectMocks
+    private CsvExportRunner csvExportRunner;
+
+    @Test
+    void run_SuccessfulExecution_ExitWithSuccess() {
+        // Arrange
+        doNothing().when(datalakeFeedScheduler).call();
+
+        // Act
+        csvExportRunner.run();
+
+        // Assert
+        verify(datalakeFeedScheduler, times(1)).call();
+        // You may assert other behaviors or log statements as needed
+    }
+
+    @Test
+    void run_ExceptionThrown_ExitWithFailure() {
+        // Arrange
+        doThrow(new RuntimeException("Simulated exception")).when(datalakeFeedScheduler).call();
+
+        // Act
+        csvExportRunner.run();
+
+        // Assert
+        verify(datalakeFeedScheduler, times(1)).call();
+        // You may assert other behaviors or log statements as needed
+    }
+}
