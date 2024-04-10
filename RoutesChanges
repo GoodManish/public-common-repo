@@ -234,3 +234,34 @@ public class RabbitMQProperties {
     // Getters only
 }
 -----
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.Map;
+
+@Configuration
+@ConfigurationProperties(prefix = "swing.ibmmq")
+public class IBMMQProperties {
+
+    private String queueManager;
+    private String channel;
+    private String host;
+    private int port;
+    private String user;
+    private String pass;
+    private Map<String, Region> regions;
+
+    // Getters and setters
+
+    public static class Region {
+        private Map<String, Flow> flows;
+
+        // Getters and setters
+    }
+
+    public static class Flow {
+        private Map<String, String> queues;
+
+        // Getters and setters
+    }
+}
