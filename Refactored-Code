@@ -1,0 +1,206 @@
+@Component
+@Getter
+public class CommonProperties {
+    private final String transactQueue;
+    private final String transactMidwayQueue;
+    private final String rabbitDeadLetterUri;
+    private final boolean transactFlowActive;
+    private final String activeProfile;
+    private final String swingIndIncomingIbmQueue;
+    private final String swingHkgAckIbmQueue;
+    private final String swingHkgPriorityIbmQueue;
+    private final String swingHkgNonPriorityIbmQueue;
+    private final String swingSgpAckIbmQueue;
+    private final String swingSgpPriorityIbmQueue;
+    private final String swingSgpNonPriorityIbmQueue;
+
+    public CommonProperties(Environment environment) {
+        this.swingIndIncomingIbmQueue    = environment.getRequiredProperty("swing.ibmmq.regions.IND.flows.MT.queues.incoming");
+        this.transactQueue               = environment.getRequiredProperty("transact.activemq.queue-transact");
+        this.transactMidwayQueue         = environment.getRequiredProperty("transact.activemq.queue-midway");
+        this.swingHkgAckIbmQueue         = environment.getRequiredProperty("swing.ibmmq.regions.HKG.flows.MX.queues.ack");
+        this.swingHkgPriorityIbmQueue    = environment.getRequiredProperty("swing.ibmmq.regions.HKG.flows.MX.queues.priority");
+        this.swingHkgNonPriorityIbmQueue = environment.getRequiredProperty("swing.ibmmq.regions.HKG.flows.MX.queues.non-priority");
+        this.swingSgpAckIbmQueue         = environment.getRequiredProperty("swing.ibmmq.regions.SGP.flows.MX.queues.ack");
+        this.swingSgpPriorityIbmQueue    = environment.getRequiredProperty("swing.ibmmq.regions.SGP.flows.MX.queues.priority");
+        this.swingSgpNonPriorityIbmQueue = environment.getRequiredProperty("swing.ibmmq.regions.SGP.flows.MX.queues.non-priority");
+        this.transactFlowActive = environment.getRequiredProperty("camel.flow.transactFlag", Boolean.class);
+        this.activeProfile      = environment.getRequiredProperty("spring.profiles.active");
+
+        String deadLetterHost = environment.getRequiredProperty("rabbit.deadletter.host");
+        String deadLetterPort = environment.getRequiredProperty("rabbit.deadletter.port");
+        String deadLetterUser = environment.getRequiredProperty("rabbit.deadletter.user");
+        String deadLetterPass = environment.getRequiredProperty("rabbit.deadletter.pass");
+        String deadLetterQueue = environment.getRequiredProperty("rabbit.deadletter.queue");
+        String deadLetterExchange = environment.getRequiredProperty("rabbit.deadletter.exchange");
+        String deadLetterRoutingKey = environment.getRequiredProperty("rabbit.deadletter.routingKey");
+        this.rabbitDeadLetterUri = "rabbitmq://" + deadLetterHost + ":" + deadLetterPort + "/" + deadLetterExchange +
+                "?queue=" + deadLetterQueue + "&autoDelete=false&routingKey=" + deadLetterRoutingKey +
+                "&username=" + deadLetterUser + "&password=" + deadLetterPass +
+                "&connectionFactory=#rabbitConnectionFactory&sslProtocol=TLSv1.2";
+    }
+}
+---
+import org.apache.camel.*;
+import org.apache.camel.builder.RouteBuilder;
+import org.springframework.stereotype.Component;
+
+import static org.apache.camel.LoggingLevel.ERROR;
+@Component
+public class SwingOutwardRoute extends RouteBuilder {
+
+    private final CommonProperties commonProperties;
+
+    public SwingOutwardRoute(CamelContext context, CommonProperties commonProperties) {
+        super(context);
+        this.commonProperties = commonProperties;
+    }
+
+    @Override
+    public void configure() throws Exception {
+        Predicate isTransactEnabled = x -> !commonProperties.isTransactFlowActive();
+        String body = !commonProperties.getActiveProfile().contains("prod") ? "${body}" : "";
+
+        errorHandler(deadLetterChannel(commonProperties.getRabbitDeadLetterUri())
+                .maximumRedeliveries(3)
+                .redeliveryDelay(2000)
+                .retryAttemptedLogLevel(ERROR)
+                .onExceptionOccurred(exchange -> exchange.getMessage().setHeader("TO_END_POINT", exchange.getProperty(Exchange.TO_ENDPOINT)))
+        );
+
+        from("wmqSwing:queue:" + commonProperties.getSwingIndIncomingIbmQueue())
+                .routeId("SwingHubRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + commonProperties.getSwingIndIncomingIbmQueue() + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + commonProperties.getTransactQueue())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactQueue -- ${id}")
+                .end();
+    }
+}
+-----
+@Component
+public class HkgSwingToTransactRoute extends RouteBuilder {
+
+    private final CommonProperties commonProperties;
+
+    public HkgSwingToTransactRoute(CamelContext context, CommonProperties commonProperties) {
+        super(context);
+        this.commonProperties = commonProperties;
+    }
+
+    @Override
+    public void configure() throws Exception {
+        Predicate isTransactEnabled = x -> !commonProperties.isTransactFlowActive();
+        String body = !commonProperties.getActiveProfile().contains("prod") ? "${body}" : "";
+
+        errorHandler(deadLetterChannel(commonProperties.getRabbitDeadLetterUri())
+                .maximumRedeliveries(3)
+                .redeliveryDelay(2000)
+                .retryAttemptedLogLevel(ERROR)
+                .onExceptionOccurred(exchange -> exchange.getMessage().setHeader("TO_END_POINT", exchange.getProperty(TO_ENDPOINT)))
+        );
+
+        from("wmqSwing:queue:" + commonProperties.getSwingHkgAckIbmQueue())
+                .routeId("SwingAckHkgRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + commonProperties.getSwingHkgAckIbmQueue() + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + commonProperties.getTransactMidwayQueue())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactMidway Queue -- ${id}")
+                .end();
+        from("wmqSwing:queue:" + commonProperties.getSwingHkgPriorityIbmQueue())
+                .routeId("SwingPriorityHkgRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + commonProperties.getSwingHkgPriorityIbmQueue() + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + commonProperties.getTransactMidwayQueue())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactMidway Queue -- ${id}")
+                .end();
+        from("wmqSwing:queue:" + commonProperties.getSwingHkgNonPriorityIbmQueue())
+                .routeId("SwingNonPriorityHkgRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + commonProperties.getSwingHkgNonPriorityIbmQueue() + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + commonProperties.getTransactMidwayQueue())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactMidway Queue -- ${id}")
+                .end();
+    }
+}
+----
+mport org.apache.camel.*;
+import org.apache.camel.builder.RouteBuilder;
+import org.springframework.stereotype.Component;
+
+import static org.apache.camel.Exchange.*;
+import static org.apache.camel.LoggingLevel.ERROR;
+@Component
+public class SgpSwingToTransactRoute extends RouteBuilder {
+
+    private final CommonProperties commonProperties;
+
+    public SgpSwingToTransactRoute(CamelContext context, CommonProperties commonProperties) {
+        super(context);
+        this.commonProperties = commonProperties;
+    }
+
+    @Override
+    public void configure() throws Exception {
+        Predicate isTransactEnabled = x -> !commonProperties.isTransactFlowActive();
+        String body = !commonProperties.getActiveProfile().contains("prod") ? "${body}" : "";
+
+        errorHandler(deadLetterChannel(commonProperties.getRabbitDeadLetterUri())
+                .maximumRedeliveries(3)
+                .redeliveryDelay(2000)
+                .retryAttemptedLogLevel(ERROR)
+                .onExceptionOccurred(exchange -> exchange.getMessage().setHeader("TO_END_POINT", exchange.getProperty(TO_ENDPOINT)))
+        );
+
+        from("wmqSwing:queue:" + commonProperties.getSwingSgpAckIbmQueue())
+                .routeId("SwingAckSgpRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + commonProperties.getSwingSgpAckIbmQueue() + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + commonProperties.getTransactMidwayQueue())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactMidway Queue -- ${id}")
+                .end();
+        from("wmqSwing:queue:" + commonProperties.getSwingSgpPriorityIbmQueue())
+                .routeId("SwingPrioritySgpRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + commonProperties.getSwingSgpPriorityIbmQueue() + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + commonProperties.getTransactMidwayQueue())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactMidway Queue -- ${id}")
+                .end();
+        from("wmqSwing:queue:" + commonProperties.getSwingSgpNonPriorityIbmQueue())
+                .routeId("SwingNonPrioritySgpRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + commonProperties.getSwingSgpNonPriorityIbmQueue() + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + commonProperties.getTransactMidwayQueue())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactMidway Queue -- ${id}")
+                .end();
+    }
+}
+
