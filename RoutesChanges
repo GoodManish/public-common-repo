@@ -1,0 +1,236 @@
+import org.apache.camel.ExchangePattern;
+import org.apache.camel.LoggingLevel;
+import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.builder.PredicateBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+public class SwingOutwardRoute extends RouteBuilder {
+
+    @Autowired
+    private DeadLetterHandler deadLetterHandler;
+
+    @Autowired
+    private IBMMQProperties ibmMQProperties;
+
+    @Autowired
+    private ActiveMQProperties activeMQProperties;
+
+    @Override
+    public void configure() throws Exception {
+        PredicateBuilder isTransactEnabled = x -> !ibmMQProperties.getIsTransactFlowActive();
+        String body = ibmMQProperties.getActiveProfile().contains("prod") ? "${body}" : "";
+
+        errorHandler(deadLetterHandler.configure(routeContext()));
+
+        from("wmqSwing:queue:" + ibmMQProperties.getRegions().get("IND").getFlows().get("MT").getQueues().get("incoming"))
+                .routeId("SwingHubRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + ibmMQProperties.getRegions().get("IND").getFlows().get("MT").getQueues().get("incoming") + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + activeMQProperties.getQueueMidway())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactQueue -- ${id}")
+                .end();
+    }
+}
+-----
+import org.apache.camel.ExchangePattern;
+import org.apache.camel.LoggingLevel;
+import org.apache.camel.builder.PredicateBuilder;
+import org.apache.camel.builder.RouteBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+public class HkgSwingToTransactRoute extends RouteBuilder {
+
+    @Autowired
+    private DeadLetterHandler deadLetterHandler;
+
+    @Autowired
+    private IBMMQProperties ibmMQProperties;
+
+    @Autowired
+    private ActiveMQProperties activeMQProperties;
+
+    @Override
+    public void configure() throws Exception {
+        PredicateBuilder isTransactEnabled = x -> !ibmMQProperties.getIsTransactFlowActive();
+        String body = ibmMQProperties.getActiveProfile().contains("prod") ? "${body}" : "";
+
+        from("wmqSwing:queue:" + ibmMQProperties.getRegions().get("HKG").getFlows().get("MX").getQueues().get("ack"))
+                .routeId("SwingAckHkgRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + ibmMQProperties.getRegions().get("HKG").getFlows().get("MX").getQueues().get("ack") + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + activeMQProperties.getQueueTransact())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactQueue -- ${id}")
+                .end();
+
+        from("wmqSwing:queue:" + ibmMQProperties.getRegions().get("HKG").getFlows().get("MX").getQueues().get("priority"))
+                .routeId("SwingPriorityHkgRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + ibmMQProperties.getRegions().get("HKG").getFlows().get("MX").getQueues().get("priority") + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + activeMQProperties.getQueueTransact())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactQueue -- ${id}")
+                .end();
+
+        from("wmqSwing:queue:" + ibmMQProperties.getRegions().get("HKG").getFlows().get("MT").getQueues().get("non-priority"))
+                .routeId("SwingNonPriorityHkgRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + ibmMQProperties.getRegions().get("HKG").getFlows().get("MT").getQueues().get("non-priority") + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + activeMQProperties.getQueueTransact())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactQueue -- ${id}")
+                .end();
+    }
+}
+---------
+import org.apache.camel.ExchangePattern;
+import org.apache.camel.LoggingLevel;
+import org.apache.camel.builder.PredicateBuilder;
+import org.apache.camel.builder.RouteBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+public class SgpSwingToTransactRoute extends RouteBuilder {
+
+    @Autowired
+    private DeadLetterHandler deadLetterHandler;
+
+    @Autowired
+    private IBMMQProperties ibmMQProperties;
+
+    @Autowired
+    private ActiveMQProperties activeMQProperties;
+
+    @Override
+    public void configure() throws Exception {
+        PredicateBuilder isTransactEnabled = x -> !ibmMQProperties.getIsTransactFlowActive();
+        String body = ibmMQProperties.getActiveProfile().contains("prod") ? "${body}" : "";
+
+        from("wmqSwing:queue:" + ibmMQProperties.getRegions().get("SGP").getFlows().get("MX").getQueues().get("ack"))
+                .routeId("SwingAckSgpRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + ibmMQProperties.getRegions().get("SGP").getFlows().get("MX").getQueues().get("ack") + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + activeMQProperties.getQueueTransact())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactQueue -- ${id}")
+                .end();
+
+        from("wmqSwing:queue:" + ibmMQProperties.getRegions().get("SGP").getFlows().get("MX").getQueues().get("priority"))
+                .routeId("SwingPrioritySgpRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + ibmMQProperties.getRegions().get("SGP").getFlows().get("MX").getQueues().get("priority") + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + activeMQProperties.getQueueTransact())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactQueue -- ${id}")
+                .end();
+
+        from("wmqSwing:queue:" + ibmMQProperties.getRegions().get("SGP").getFlows().get("MT").getQueues().get("non-priority"))
+                .routeId("SwingNonPrioritySgpRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + ibmMQProperties.getRegions().get("SGP").getFlows().get("MT").getQueues().get("non-priority") + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + activeMQProperties.getQueueTransact())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactQueue -- ${id}")
+                .end();
+    }
+}
+---------
+import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.model.RouteDefinition;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+public class DeadLetterHandler {
+
+    @Autowired
+    private RabbitMQProperties rabbitMQProperties;
+
+    public RouteDefinition configure(RouteBuilder routeBuilder) {
+        return routeBuilder.errorHandler(
+                routeBuilder.deadLetterChannel(rabbitMQProperties.getUri())
+                        .maximumRedeliveries(3)
+                        .redeliveryDelay(2000)
+                        .retryAttemptedLogLevel("ERROR")
+                        .onExceptionOccurred(exchange -> exchange.getMessage().setHeader("TO_END_POINT", exchange.getProperty("Exchange.TO_ENDPOINT")))
+        );
+    }
+}
+--------
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.Map;
+
+@Configuration
+@ConfigurationProperties(prefix = "swing.ibmmq")
+public class IBMMQProperties {
+
+    private Map<String, Region> regions;
+    private boolean isTransactFlowActive;
+    private String activeProfile;
+
+    // Getters only
+}
+--------
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@ConfigurationProperties(prefix = "transact.activemq")
+public class ActiveMQProperties {
+
+    private String url;
+    private String user;
+    private String password;
+    private String queueMidway;
+    private String queueTransact;
+
+    // Getters only
+}
+--------------
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@ConfigurationProperties(prefix = "rabbit.deadletter")
+public class RabbitMQProperties {
+
+    private String host;
+    private String port;
+    private String user;
+    private String pass;
+    private String exchange;
+    private String queue;
+    private String routingKey;
+
+    // Getters only
+}
+-----
