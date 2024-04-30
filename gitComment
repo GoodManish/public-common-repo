@@ -50,3 +50,15 @@ Code review takes a long time because we don't follow a common TODO process and 
 Develop a standardized checklist for code reviews covering common issues and best practices.
 Integrate the checklist into the code review tool for easy reference.
 Encourage reviewers to use the checklist as a guide for thorough reviews.
+====================================================================================================================================================
+
+"We've noticed an abundance of stories lingering in the 'TO REVIEW' state, which can impact our delivery timelines. To address this, we need to prioritize reviews based on impact and implement a rotation system for reviewers."
+"Stories staying too long in the 'TO REVIEW' state can hinder our progress. Let's establish clear SLAs for code review turnaround time and implement reminders to ensure timely reviews."
+"Sometimes stories are stuck in 'TO REVIEW' due to dependencies or immaturity. We should foster early engagement between teams and clarify acceptance criteria and dependencies upfront."
+"We've observed that missed requirements at the end of the development phase can lead to stories piling up in 'TO REVIEW'. To mitigate this, let's improve communication and conduct thorough requirement analysis early on."
+"Stories being held up in 'TO REVIEW' due to unclear requirements is a common issue. Let's establish a process for clarifying requirements during development and encourage continuous feedback loops."
+"Developers feeling unsure about how to test their own features can delay the code review process. Let's provide training on effective testing techniques and develop comprehensive testing guidelines."
+"When the whole team is focused on different important topics, code reviews can be delayed. Let's schedule dedicated time slots for reviews and establish a process for reassigning reviews if necessary."
+"Relying on the same team members for code reviews can lead to bottlenecks. Let's encourage knowledge sharing and cross-training to distribute expertise more evenly."
+"Code review quality often depends on the experience of the reviewer. Let's conduct regular training sessions on code review best practices and pair junior developers with senior developers for reviews."
+"Code reviews taking a long time may be due to the lack of a standardized process and checklist. Let's develop a standardized checklist for reviews and integrate it into our code review tool for easy reference."
