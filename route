@@ -1,0 +1,68 @@
+@Component
+@Getter
+public class CommonProperties {
+    private final String transactQueue;
+    private final String transactMidwayQueue;
+    private final boolean transactFlowActive;
+    private final boolean trnMsgFlag;
+    private final String activeProfile;
+    private final DeadLetterProperties deadLetterProperties;
+    private final SwingIbmQueueProperties swingIbmQueueProperties;
+
+    public CommonProperties(Environment environment) {
+        this.transactQueue = environment.getRequiredProperty("transact.activemq.queue-transact");
+        this.transactMidwayQueue = environment.getRequiredProperty("transact.activemq.queue-midway");
+        this.transactFlowActive = environment.getRequiredProperty("camel.flow.transactFlag", Boolean.class);
+        this.trnMsgFlag = environment.getRequiredProperty("transact.activemq.message.flag", Boolean.class);
+        this.activeProfile = environment.getRequiredProperty("spring.profiles.active");
+        this.deadLetterProperties = new DeadLetterProperties(environment);
+        this.swingIbmQueueProperties = new SwingIbmQueueProperties(environment);
+    }
+}
+
+@Getter
+class DeadLetterProperties {
+    private final String host;
+    private final String port;
+    private final String user;
+    private final String pass;
+    private final String queue;
+    private final String exchange;
+    private final String routingKey;
+    private final String rabbitDeadLetterUri;
+
+    public DeadLetterProperties(Environment environment) {
+        this.host = environment.getRequiredProperty("spring.rabbitmq.deadletter.host");
+        this.port = environment.getRequiredProperty("spring.rabbitmq.deadletter.port");
+        this.user = environment.getRequiredProperty("spring.rabbitmq.deadletter.user");
+        this.pass = environment.getRequiredProperty("spring.rabbitmq.deadletter.pass");
+        this.queue = environment.getRequiredProperty("spring.rabbitmq.deadletter.queue");
+        this.exchange = environment.getRequiredProperty("spring.rabbitmq.deadletter.exchange");
+        this.routingKey = environment.getRequiredProperty("spring.rabbitmq.deadletter.routingKey");
+        this.rabbitDeadLetterUri = "rabbitmq://" + host + ":" + port + "/" + exchange +
+                "?queue=" + queue + "&autoDelete=false&routingKey=" + routingKey +
+                "&username=" + user + "&password=" + pass +
+                "&connectionFactory=#rabbitConnectionFactory&sslProtocol=TLSv1.2";
+    }
+}
+
+@Getter
+class SwingIbmQueueProperties {
+    private final String indIncoming;
+    private final String hkgAck;
+    private final String hkgPriority;
+    private final String hkgNonPriority;
+    private final String sgpAck;
+    private final String sgpPriority;
+    private final String sgpNonPriority;
+
+    public SwingIbmQueueProperties(Environment environment) {
+        this.indIncoming = environment.getRequiredProperty("swing.ibmmq.IND.MT.queues.incoming");
+        this.hkgAck = environment.getRequiredProperty("swing.ibmmq.HKG.MX.queues.ack");
+        this.hkgPriority = environment.getRequiredProperty("swing.ibmmq.HKG.MX.queues.priority");
+        this.hkgNonPriority = environment.getRequiredProperty("swing.ibmmq.HKG.MX.queues.non-priority");
+        this.sgpAck = environment.getRequiredProperty("swing.ibmmq.SGP.MX.queues.ack");
+        this.sgpPriority = environment.getRequiredProperty("swing.ibmmq.SGP.MX.queues.priority");
+        this.sgpNonPriority = environment.getRequiredProperty("swing.ibmmq.SGP.MX.queues.non-priority");
+    }
+}
