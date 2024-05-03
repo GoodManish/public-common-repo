@@ -1,0 +1,79 @@
+// Base class for Swing to Transact Routes
+public abstract class SwingToTransactRoute extends RouteBuilder {
+
+    protected final CommonProperties commonProperties;
+
+    public SwingToTransactRoute(CamelContext context, CommonProperties commonProperties) {
+        super(context);
+        this.commonProperties = commonProperties;
+    }
+
+    @Override
+    public void configure() throws Exception {
+        Predicate isTransactEnabled = x -> !commonProperties.isTransactFlowActive();
+        String body = !commonProperties.getActiveProfile().contains("prod") ? "${body}" : "";
+
+        errorHandler(deadLetterChannel(commonProperties.getRabbitDeadLetterUri())
+                .maximumRedeliveries(3)
+                .redeliveryDelay(2000)
+                .retryAttemptedLogLevel(ERROR)
+                .onExceptionOccurred(exchange -> exchange.getMessage().setHeader("TO_END_POINT", exchange.getProperty(TO_ENDPOINT)))
+        );
+
+        configureRoute(isTransactEnabled, body);
+    }
+
+    protected abstract void configureRoute(Predicate isTransactEnabled, String body);
+}
+
+// SGP Swing to Transact Route
+@Component
+public class SgpSwingToTransactRoute extends SwingToTransactRoute {
+
+    public SgpSwingToTransactRoute(CamelContext context, CommonProperties commonProperties) {
+        super(context, commonProperties);
+    }
+
+    @Override
+    protected void configureRoute(Predicate isTransactEnabled, String body) {
+        from("wmqSwingMx:queue:" + commonProperties.getSwingSgpAckIbmQueue())
+                .routeId("SwingAckSgpRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + commonProperties.getSwingSgpAckIbmQueue() + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + commonProperties.getTransactMidwayQueue())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactMidway Queue -- ${id}")
+                .end();
+        
+        // Similar blocks for other queues...
+    }
+}
+
+// HKG Swing to Transact Route
+@Component
+public class HkgSwingToTransactRoute extends SwingToTransactRoute {
+
+    public HkgSwingToTransactRoute(CamelContext context, CommonProperties commonProperties) {
+        super(context, commonProperties);
+    }
+
+    @Override
+    protected void configureRoute(Predicate isTransactEnabled, String body) {
+        from("wmqSwingMx:queue:" + commonProperties.getSwingHkgAckIbmQueue())
+                .routeId("SwingAckHkgRoute")
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + commonProperties.getSwingHkgAckIbmQueue() + " --" + body)
+                .multicast()
+                .parallelProcessing()
+                .choice()
+                .when(isTransactEnabled)
+                .to("activemq:queue:" + commonProperties.getTransactMidwayQueue())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactMidway Queue -- ${id}")
+                .end();
+        
+        // Similar blocks for other queues...
+    }
+}
