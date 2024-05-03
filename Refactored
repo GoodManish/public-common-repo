@@ -1,0 +1,79 @@
+// Base class SwingToTransactRoute.java
+import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.model.dataformat.JsonLibrary;
+
+@Component
+public abstract class SwingToTransactRoute extends RouteBuilder {
+
+    private final CommonProperties commonProperties;
+
+    public SwingToTransactRoute(CamelContext context, CommonProperties commonProperties) {
+        super(context);
+        this.commonProperties = commonProperties;
+    }
+
+    @Override
+    public void configure() throws Exception {
+        errorHandler(buildErrorHandler());
+
+        from(getSourceQueue())
+                .routeId(getRouteId())
+                .setExchangePattern(ExchangePattern.InOnly)
+                .log(LoggingLevel.INFO, "-- Message received from SwingHub:" + getSourceQueue() + " -- ${body}")
+                .multicast()
+                .parallelProcessing()
+                .to("activemq:queue:" + commonProperties.getTransactMidwayQueue())
+                .log(LoggingLevel.INFO, "-- Message Sent to TransactMidway Queue -- ${id}")
+                .end();
+    }
+
+    protected abstract String getSourceQueue();
+
+    protected abstract String getRouteId();
+
+    private ErrorHandlerBuilder buildErrorHandler() {
+        return deadLetterChannel(commonProperties.getRabbitDeadLetterUri())
+                .maximumRedeliveries(3)
+                .redeliveryDelay(2000)
+                .retryAttemptedLogLevel(ERROR)
+                .onExceptionOccurred(exchange -> exchange.getMessage().setHeader("TO_END_POINT", exchange.getProperty(TO_ENDPOINT)));
+    }
+}
+---------------
+// SgpSwingToTransactRoute.java
+@Component
+public class SgpSwingToTransactRoute extends SwingToTransactRoute {
+
+    public SgpSwingToTransactRoute(CamelContext context, CommonProperties commonProperties) {
+        super(context, commonProperties);
+    }
+
+    @Override
+    protected String getSourceQueue() {
+        return "wmqSwingMx:queue:" + commonProperties.getSwingSgpAckIbmQueue();
+    }
+
+    @Override
+    protected String getRouteId() {
+        return "SwingAckSgpRoute";
+    }
+}
+--------
+// HkgSwingToTransactRoute.java
+@Component
+public class HkgSwingToTransactRoute extends SwingToTransactRoute {
+
+    public HkgSwingToTransactRoute(CamelContext context, CommonProperties commonProperties) {
+        super(context, commonProperties);
+    }
+
+    @Override
+    protected String getSourceQueue() {
+        return "wmqSwingMx:queue:" + commonProperties.getSwingHkgAckIbmQueue();
+    }
+
+    @Override
+    protected String getRouteId() {
+        return "SwingAckHkgRoute";
+    }
+}
