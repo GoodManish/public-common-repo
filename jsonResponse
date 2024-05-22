@@ -1,0 +1,16 @@
+{
+	"limitDetailList": [
+		{
+			"bdrIds": [
+				{
+					"bdrId": "1234"
+				},
+				{
+					"bdrId": "5656565656"
+				}
+			],
+			"limitId": "55588",
+			"sanctionedAmount": "500000"
+		}
+	]
+}
