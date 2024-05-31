@@ -19,3 +19,21 @@
         example = "[{\"bdrId\": \"1234\"}, {\"bdrId\": \"565656\"}]"
     )
     private List<BdrId> bdrIds;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@Schema(description = "Represents a BDR ID")
+public class BdrId {
+
+    @Schema(description = "The BDR ID", example = "1234")
+    private String bdrId;
+}
+
