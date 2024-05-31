@@ -14,3 +14,8 @@
 		}
 	]
 }
+    @Schema(
+        description = "List of BDR IDs",
+        example = "[{\"bdrId\": \"1234\"}, {\"bdrId\": \"565656\"}]"
+    )
+    private List<BdrId> bdrIds;
