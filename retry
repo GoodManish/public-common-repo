@@ -1,0 +1,126 @@
+@Slf4j
+@Configuration
+@Getter
+public class IbmMQConfig implements BeanDefinitionRegistryPostProcessor, EnvironmentAware {
+    private IbmMQProperty queueProperties;
+
+    public Map<String, IbmMQueueDetail> ibmMQInstances() {
+        return queueProperties.getInstances();
+    }
+
+    @Bean
+    public Map<String, JmsComponent> jmsComponents() {
+        Map<String, IbmMQueueDetail> instances = ibmMQInstances();
+        Map<String, JmsComponent> jmsComponentInstances = new HashMap<>();
+        for (Map.Entry<String, IbmMQueueDetail> entry : instances.entrySet()) {
+            IbmMQueueDetail queueDetails = entry.getValue();
+            MQQueueConnectionFactory mqQueueConnectionFactory = this.mqQueueConnectionFactory(
+                    queueDetails.getHost(), queueDetails.getChannel(), queueDetails.getPort(), queueDetails.getQueueManager());
+            UserCredentialsConnectionFactoryAdapter userCredentialsConnectionFactoryAdapter = this.userCredentialsConnectionFactoryAdapter(
+                    mqQueueConnectionFactory, queueDetails.getUser(), queueDetails.getPass());
+            CachingConnectionFactory cachingConnectionFactory = this.cachingConnectionFactory(userCredentialsConnectionFactoryAdapter);
+            JmsTransactionManager jmsTransactionManager = this.jmsTransactionManager(cachingConnectionFactory);
+            JmsComponent jmsComponent = this.wmq(mqQueueConnectionFactory, jmsTransactionManager);
+            jmsComponentInstances.put(entry.getKey(), jmsComponent);
+        }
+        return jmsComponentInstances;
+    }
+
+    public MQQueueConnectionFactory mqQueueConnectionFactory(String host, String channel, int port, String queueManager) {
+        MQQueueConnectionFactory mqQueueConnectionFactory = new MQQueueConnectionFactory();
+        mqQueueConnectionFactory.setHostName(host);
+        try {
+            mqQueueConnectionFactory.setTransportType(1);
+            mqQueueConnectionFactory.setChannel(channel);
+            mqQueueConnectionFactory.setPort(port);
+            mqQueueConnectionFactory.setQueueManager(queueManager);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+        }
+        return mqQueueConnectionFactory;
+    }
+
+    public UserCredentialsConnectionFactoryAdapter userCredentialsConnectionFactoryAdapter(MQQueueConnectionFactory mqQueueConnectionFactory, String userName, String password) {
+        UserCredentialsConnectionFactoryAdapter userCredentialsConnectionFactoryAdapter = new UserCredentialsConnectionFactoryAdapter();
+        userCredentialsConnectionFactoryAdapter.setUsername(userName);
+        userCredentialsConnectionFactoryAdapter.setPassword(password);
+        userCredentialsConnectionFactoryAdapter.setTargetConnectionFactory(mqQueueConnectionFactory);
+        return userCredentialsConnectionFactoryAdapter;
+    }
+
+    public CachingConnectionFactory cachingConnectionFactory(UserCredentialsConnectionFactoryAdapter userCredentialsConnectionFactoryAdapter) {
+        CachingConnectionFactory cachingConnectionFactory = new CachingConnectionFactory();
+        cachingConnectionFactory.setTargetConnectionFactory(userCredentialsConnectionFactoryAdapter);
+        cachingConnectionFactory.setSessionCacheSize(500);
+        cachingConnectionFactory.setReconnectOnException(true);
+        return cachingConnectionFactory;
+    }
+
+    public JmsTransactionManager jmsTransactionManager(CachingConnectionFactory cachingConnectionFactory) {
+        JmsTransactionManager jmsTransactionManager = new JmsTransactionManager();
+        jmsTransactionManager.setConnectionFactory(cachingConnectionFactory);
+        return jmsTransactionManager;
+    }
+
+    public JmsComponent wmq(ConnectionFactory connectionFactory, JmsTransactionManager jmsTransactionManager) {
+        return JmsComponent.jmsComponentTransacted(connectionFactory, jmsTransactionManager);
+    }
+
+    private void registerBean(BeanDefinitionRegistry beanDefinitionRegistry, String beanName, Supplier<JmsComponent> supplier) {
+        BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(JmsComponent.class, supplier).getBeanDefinition();
+        beanDefinitionRegistry.registerBeanDefinition(beanName, beanDefinition);
+    }
+
+    @PostConstruct
+    @Override
+    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry beanDefinitionRegistry) throws BeansException {
+        jmsComponents().forEach((key, value) -> registerBean(beanDefinitionRegistry, key, () -> value));
+    }
+
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
+    }
+
+    @Override
+    public void setEnvironment(@NotNull Environment environment) {
+        bindProperties(environment);
+    }
+
+    private void bindProperties(Environment environment) {
+        this.queueProperties = Binder.get(environment)
+                .bind("ibmmq", IbmMQProperty.class)
+                .orElseThrow(IllegalStateException::new);
+    }
+
+    @Bean
+    public Map<String, JmsTemplate> jmsTemplates(Map<String, JmsComponent> jmsComponents) {
+        Map<String, JmsTemplate> jmsTemplates = new HashMap<>();
+        for (Map.Entry<String, JmsComponent> entry : jmsComponents.entrySet()) {
+            JmsTemplate jmsTemplate = new JmsTemplate(entry.getValue().getConnectionFactory());
+            jmsTemplates.put(entry.getKey(), jmsTemplate);
+        }
+        return jmsTemplates;
+    }
+}
+
+
+------------
+
+@Service
+public class MyService {
+    private final Map<String, JmsTemplate> jmsTemplates;
+
+    @Autowired
+    public MyService(Map<String, JmsTemplate> jmsTemplates) {
+        this.jmsTemplates = jmsTemplates;
+    }
+
+    public void sendMessage(String key, String destination, String message) {
+        JmsTemplate jmsTemplate = jmsTemplates.get(key);
+        if (jmsTemplate != null) {
+            jmsTemplate.send(destination, session -> session.createTextMessage(message));
+        } else {
+            throw new IllegalArgumentException("No JMS template found for key: " + key);
+        }
+    }
+}
