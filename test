@@ -1,0 +1,37 @@
+import org.apache.camel.Exchange;
+import org.apache.camel.Message;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.Mockito;
+
+import static org.mockito.Mockito.*;
+
+public class HeaderInjectorTest {
+
+    private HeaderInjector headerInjector;
+    private Tracer tracer;
+    private Exchange exchange;
+    private Message message;
+
+    @Before
+    public void setUp() {
+        tracer = mock(Tracer.class);
+        headerInjector = new HeaderInjector(tracer);
+        exchange = mock(Exchange.class);
+        message = mock(Message.class);
+
+        when(exchange.getIn()).thenReturn(message);
+    }
+
+    @Test
+    public void testInjectHeaders() {
+        // Call the method to test
+        headerInjector.injectHeaders(exchange);
+
+        // Verify that the tracer setTrac method was called with the correct message
+        verify(tracer).setTrac(message);
+
+        // Verify that the exchange setMessage method was called with the correct message
+        verify(exchange).setMessage(message);
+    }
+}
