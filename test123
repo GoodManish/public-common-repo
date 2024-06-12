@@ -1,0 +1,51 @@
+Summary:
+Update Camel Routes and Code for MX Message Flow Integration and SEIA Header Addition
+
+Description:
+The camel routes and associated code have been updated to accommodate the new MX message flow for different business entities (HKG, SGP), while maintaining support for the existing MT message flow. Additionally, SEIA headers have been added to the MX outward message flow.
+
+Details:
+
+Camel Route Updates:
+
+Enhanced existing routes to support both MT and MX message flows.
+Added specific routes for handling MX messages for HKG and SGP business entities.
+Code Modifications:
+
+Refactored code to ensure seamless integration of MX message processing.
+Implemented conditional logic to differentiate between MT and MX message types.
+SEIA Header Addition:
+
+Integrated SEIA headers into the outbound MX message flow.
+Ensured that SEIA headers are correctly populated and attached to MX messages.
+Testing and Validation:
+
+Performed comprehensive testing to validate the new MX message flow.
+Verified that the MT message flow remains unaffected.
+Ensured proper functioning of SEIA headers in the MX outward messages.
+Impact:
+
+Business entities HKG and SGP can now process MX messages efficiently.
+SEIA headers enhance the traceability and monitoring of outbound MX messages.
+The existing MT message flow continues to operate without disruption.
+Attachments:
+
+[Updated Camel Routes Diagram]
+[Code Diff Report]
+[Test Case Results]
+Notes:
+
+Ensure to review and merge the changes after thorough code review and validation.
+Coordinate with the QA team for additional testing in the staging environment.
+Assignee:
+[Developer's Name]
+
+Priority:
+High
+
+This description provides a comprehensive overview of the changes made, including the purpose, impact, and details of the modifications. It ensures that all stakeholders understand the scope and importance of the updates.
+
+
+
+
+
