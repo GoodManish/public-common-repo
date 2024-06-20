@@ -1,0 +1,178 @@
+package com.example.demo;
+
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
+
+@JacksonXmlRootElement(localName = "Message")
+public class Message {
+
+    @JacksonXmlProperty(localName = "TransferMx")
+    private String transferMx;
+
+    @JacksonXmlProperty(localName = "Report")
+    private String report;
+
+    @JacksonXmlProperty(localName = "ReplyToQueue")
+    private String replyToQueue;
+
+    @JacksonXmlProperty(localName = "ReplyToQueueManager")
+    private String replyToQueueManager;
+
+    @JacksonXmlProperty(localName = "Feedback")
+    private String feedback;
+
+    @JacksonXmlProperty(localName = "MsgType")
+    private String msgType;
+
+    @JacksonXmlProperty(localName = "MessageId")
+    private String messageId;
+
+    @JacksonXmlProperty(localName = "CorrelationId")
+    private String correlationId;
+
+    @JacksonXmlProperty(localName = "Result")
+    private String result;
+
+    // Getters and Setters
+    public String getTransferMx() {
+        return transferMx;
+    }
+
+    public void setTransferMx(String transferMx) {
+        this.transferMx = transferMx;
+    }
+
+    public String getReport() {
+        return report;
+    }
+
+    public void setReport(String report) {
+        this.report = report;
+    }
+
+    public String getReplyToQueue() {
+        return replyToQueue;
+    }
+
+    public void setReplyToQueue(String replyToQueue) {
+        this.replyToQueue = replyToQueue;
+    }
+
+    public String getReplyToQueueManager() {
+        return replyToQueueManager;
+    }
+
+    public void setReplyToQueueManager(String replyToQueueManager) {
+        this.replyToQueueManager = replyToQueueManager;
+    }
+
+    public String getFeedback() {
+        return feedback;
+    }
+
+    public void setFeedback(String feedback) {
+        this.feedback = feedback;
+    }
+
+    public String getMsgType() {
+        return msgType;
+    }
+
+    public void setMsgType(String msgType) {
+        this.msgType = msgType;
+    }
+
+    public String getMessageId() {
+        return messageId;
+    }
+
+    public void setMessageId(String messageId) {
+        this.messageId = messageId;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public String getResult() {
+        return result;
+    }
+
+    public void setResult(String result) {
+        this.result = result;
+    }
+}
+
+---------
+
+package com.example.demo;
+
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import org.springframework.stereotype.Service;
+
+@Service
+public class XmlService {
+
+    private final XmlMapper xmlMapper;
+
+    public XmlService() {
+        this.xmlMapper = new XmlMapper();
+        this.xmlMapper.configure(com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator.Feature.WRITE_XML_DECLARATION, true);
+        this.xmlMapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+    }
+
+    public String convertToXml(Message message) {
+        try {
+            ObjectWriter writer = xmlMapper.writer().withRootName("Message");
+            return writer.writeValueAsString(message);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error generating XML: " + e.getMessage();
+        }
+    }
+}
+
+------------
+
+
+package com.example.demo;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api")
+public class MessageController {
+
+    private final XmlService xmlService;
+
+    @Autowired
+    public MessageController(XmlService xmlService) {
+        this.xmlService = xmlService;
+    }
+
+    @GetMapping("/message")
+    public String getMessageXml() {
+        // Step 1: Create and populate the Message object
+        Message message = new Message();
+        message.setTransferMx("ExampleTransferMx");
+        message.setReport("ExampleReport");
+        message.setReplyToQueue("ExampleReplyToQueue");
+        message.setReplyToQueueManager("ExampleReplyToQueueManager");
+        message.setFeedback("ExampleFeedback");
+        message.setMsgType("ExampleMsgType");
+        message.setMessageId("ExampleMessageId");
+        message.setCorrelationId("ExampleCorrelationId");
+        message.setResult("ExampleResult");
+
+        // Step 2: Use the XmlService to convert the Message object to XML
+        return xmlService.convertToXml(message);
+    }
+}
