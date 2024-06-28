@@ -1,0 +1,56 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+public class YourClassNameTest {
+
+    @Mock
+    private XmlMapper xmlMapperMock;
+
+    @Mock
+    private ObjectWriter objectWriterMock;
+
+    private YourClassName yourClassName;
+
+    @BeforeEach
+    public void setUp() {
+        MockitoAnnotations.initMocks(this);
+        yourClassName = new YourClassName();
+        yourClassName.xmlMapper = xmlMapperMock;
+    }
+
+    @Test
+    public void testInjectXML_Success() throws Exception {
+        // Mock behavior for successful serialization
+        Message message = new Message();
+        message.setMessageId("123");
+        when(xmlMapperMock.writer().withRootName("Message")).thenReturn(objectWriterMock);
+        when(objectWriterMock.writeValueAsString(any())).thenReturn("<Message><MessageId>123</MessageId></Message>");
+
+        String result = yourClassName.injectXML(123L);
+
+        assertEquals("<Message><MessageId>123</MessageId></Message>", result);
+        verify(xmlMapperMock.writer().withRootName("Message")).writeValueAsString(any());
+    }
+
+    @Test
+    public void testInjectXML_Exception() throws Exception {
+        // Mock behavior for exception scenario
+        when(xmlMapperMock.writer().withRootName("Message")).thenReturn(objectWriterMock);
+        when(objectWriterMock.writeValueAsString(any())).thenThrow(new RuntimeException("Serialization error"));
+
+        String result = yourClassName.injectXML(123L);
+
+        assertEquals("", result);  // Or assert based on your error handling logic
+        verify(xmlMapperMock.writer().withRootName("Message")).writeValueAsString(any());
+        // Optionally, verify logging of the error
+    }
+}
