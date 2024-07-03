@@ -1,0 +1,55 @@
+import org.apache.camel.Exchange;
+import org.apache.camel.Message;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.mockito.Mockito.*;
+
+@RunWith(MockitoJUnitRunner.class)
+public class ClearJMSCorrelationIDProcessorTest {
+
+    @Mock
+    private Exchange exchange;
+
+    @Mock
+    private Message message;
+
+    @Test
+    public void testProcess() throws Exception {
+        // Create an instance of ClearJMSCorrelationIDProcessor
+        ClearJMSCorrelationIDProcessor processor = new ClearJMSCorrelationIDProcessor();
+
+        // Mock the behavior of Exchange and Message
+        when(exchange.getIn()).thenReturn(message);
+
+        // Prepare headers map with initial values
+        Map<String, Object> headers = new HashMap<>();
+        headers.put("JMSCorrelationID", "sampleCorrelationID");
+
+        // Mock message.getHeaders() to return the prepared headers map
+        when(message.getHeaders()).thenReturn(headers);
+
+        // Capture the headers before processing
+        Map<String, Object> headersBefore = new HashMap<>(headers);
+
+        // Invoke the process method
+        processor.process(exchange);
+
+        // Capture the headers after processing
+        Map<String, Object> headersAfter = new HashMap<>(headers);
+
+        // Verify that setHeader("JMSCorrelationID", null) was called on the message
+        verify(message).setHeader("JMSCorrelationID", null);
+
+        // Assert that the headers map reflects the updated value
+        assert headersBefore.containsKey("JMSCorrelationID"); // Assert the header exists before
+        assert headersBefore.get("JMSCorrelationID").equals("sampleCorrelationID"); // Assert the original value
+
+        assert !headersAfter.containsKey("JMSCorrelationID"); // Assert the header does not exist after processing
+    }
+}
