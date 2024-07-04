@@ -1,0 +1,107 @@
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class YourClassName {
+
+    private final XmlMapper xmlMapper;
+
+    public YourClassName() {
+        xmlMapper = new XmlMapper();
+        // Ensure XML declaration is included
+        xmlMapper.configure(ToXmlGenerator.Feature.WRITE_XML_DECLARATION, true);
+    }
+
+    public String injectXML(Long uid) {
+        String xml = "";
+        try {
+            ObjectWriter writer = xmlMapper.writer().withRootName("Message");
+            xml = writer.writeValueAsString(getMessage(uid));
+            
+            // Define the regex pattern for the XML declaration
+            Pattern pattern = Pattern.compile("<\\?xml version='1\\.0' encoding='UTF-8'\\?>");
+            Matcher matcher = pattern.matcher(xml);
+            
+            // Replace single quotes with double quotes in the XML declaration
+            if (matcher.find()) {
+                xml = matcher.replaceFirst("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return xml;
+    }
+
+    private Message getMessage(Long uid) {
+        Message message = new Message();
+        message.setTransferMx("ExampleTransferMx");
+        message.setReport("ExampleReport");
+        message.setReplyToQueue("ExampleReplyToQueue");
+        message.setReplyToQueueManager("ExampleReplyToQueueManager");
+        message.setFeedback("ExampleFeedback");
+        message.setMsgType("ExampleMsgType");
+        message.setMessageId("ExampleMessageId");
+        message.setCorrelationId("ExampleCorrelationId");
+        message.setResult("ExampleResult");
+        // Set other message properties based on uid or other logic
+        return message;
+    }
+
+    public static void main(String[] args) {
+        YourClassName instance = new YourClassName();
+        String result = instance.injectXML(123L);
+        System.out.println(result);
+    }
+}
+
+class Message {
+    private String transferMx;
+    private String report;
+    private String replyToQueue;
+    private String replyToQueueManager;
+    private String feedback;
+    private String msgType;
+    private String messageId;
+    private String correlationId;
+    private String result;
+
+    // Getters and setters omitted for brevity
+
+    public void setTransferMx(String transferMx) {
+        this.transferMx = transferMx;
+    }
+
+    public void setReport(String report) {
+        this.report = report;
+    }
+
+    public void setReplyToQueue(String replyToQueue) {
+        this.replyToQueue = replyToQueue;
+    }
+
+    public void setReplyToQueueManager(String replyToQueueManager) {
+        this.replyToQueueManager = replyToQueueManager;
+    }
+
+    public void setFeedback(String feedback) {
+        this.feedback = feedback;
+    }
+
+    public void setMsgType(String msgType) {
+        this.msgType = msgType;
+    }
+
+    public void setMessageId(String messageId) {
+        this.messageId = messageId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public void setResult(String result) {
+        this.result = result;
+    }
+}
