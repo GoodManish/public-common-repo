@@ -1,0 +1,74 @@
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.*;
+import org.springframework.core.env.Environment;
+
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.model.*;
+
+class CSVUploaderTest {
+
+    @Mock
+    private S3Client s3Client;
+
+    @Mock
+    private Environment environment;
+
+    @InjectMocks
+    private CSVUploader csvUploader;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        when(environment.getRequiredProperty("currentdate")).thenReturn("2024-07-17");
+        when(environment.getRequiredProperty("objectstorage.bucketName")).thenReturn("test-bucket");
+    }
+
+    @Test
+    void testUpload() throws IOException {
+        String csvFileName = "src/test/resources/test-file.csv";
+        String tableName = "test-table";
+
+        // Create a test file
+        File file = new File(csvFileName);
+        Files.write(file.toPath(), "test data".getBytes());
+
+        // Mock S3 client behavior
+        CreateMultipartUploadResponse createResponse = CreateMultipartUploadResponse.builder()
+            .uploadId("test-upload-id")
+            .build();
+        when(s3Client.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(createResponse);
+
+        UploadPartResponse uploadPartResponse = UploadPartResponse.builder()
+            .eTag("etag")
+            .build();
+        when(s3Client.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(uploadPartResponse);
+
+        CompleteMultipartUploadResponse completeResponse = CompleteMultipartUploadResponse.builder().build();
+        when(s3Client.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenReturn(completeResponse);
+
+        GetUrlRequest getUrlRequest = GetUrlRequest.builder()
+            .bucket("test-bucket")
+            .key("2024-07-17/test-table/test-file.csv")
+            .build();
+        when(s3Client.utilities().getUrl(getUrlRequest)).thenReturn("https://s3.amazonaws.com/test-bucket/2024-07-17/test-table/test-file.csv");
+
+        // Call the upload method
+        csvUploader.upload(csvFileName, tableName);
+
+        // Verify the interactions
+        verify(s3Client).createMultipartUpload(any(CreateMultipartUploadRequest.class));
+        verify(s3Client, atLeastOnce()).uploadPart(any(UploadPartRequest.class), any(RequestBody.class));
+        verify(s3Client).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
+        verify(s3Client.utilities()).getUrl(getUrlRequest);
+    }
+}
