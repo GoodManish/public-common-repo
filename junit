@@ -72,3 +72,18 @@ class CSVUploaderTest {
         verify(s3Client.utilities()).getUrl(getUrlRequest);
     }
 }
+
+
+--------
+
+        URL mockUrl = new URL("https://s3.amazonaws.com/test-bucket/2024-07-17/test-table/test-file.csv");
+        doAnswer(new Answer<URL>() {
+            @Override
+            public URL answer(InvocationOnMock invocation) {
+                GetUrlRequest request = invocation.getArgument(0);
+                assertNotNull(request); // Check that request is not null
+                assertEquals("test-bucket", request.bucket());
+                assertEquals("2024-07-17/test-table/test-file.csv", request.key());
+                return mockUrl;
+            }
+        }).when(s3Utilities).getUrl(any(GetUrlRequest.class));
