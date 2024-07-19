@@ -1,0 +1,138 @@
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
+import software.amazon.awssdk.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.services.s3.model.UploadPartResponse;
+import software.amazon.awssdk.core.sync.RequestBody;
+
+public class UploadPartResponseBuilderTest {
+
+    private S3Client s3Client;
+    private RandomAccessFile randomAccessFile;
+    private UploadPartResponseBuilder builder;
+
+    @BeforeEach
+    public void setUp() throws IOException {
+        s3Client = mock(S3Client.class);
+        randomAccessFile = mock(RandomAccessFile.class);
+        builder = new UploadPartResponseBuilder(randomAccessFile, 5 * 1024 * 1024);
+    }
+
+    @Test
+    public void testBuildParts() throws IOException {
+        when(randomAccessFile.length()).thenReturn(10L); // Mock file length
+        when(randomAccessFile.getChannel().read(any(ByteBuffer.class))).thenReturn(5); // Mock bytes read
+
+        // Mock the S3Client uploadPart method
+        UploadPartResponse uploadPartResponse = mock(UploadPartResponse.class);
+        when(uploadPartResponse.eTag()).thenReturn("etag");
+        when(s3Client.uploadPart(any(UploadPartRequest.class), any(RequestBody.class))).thenReturn(uploadPartResponse);
+
+        List<CompletedPart> completedParts = builder.buildParts("bucket", "folder/file", "uploadId", s3Client);
+
+        // Verify interactions and assert results
+        ArgumentCaptor<UploadPartRequest> requestCaptor = ArgumentCaptor.forClass(UploadPartRequest.class);
+        verify(s3Client, times(2)).uploadPart(requestCaptor.capture(), any(RequestBody.class));
+
+        assertEquals(2, completedParts.size());
+        assertEquals("etag", completedParts.get(0).eTag());
+        assertEquals("etag", completedParts.get(1).eTag());
+    }
+
+    @Test
+    public void testClose() throws IOException {
+        builder.close();
+        verify(randomAccessFile).close();
+    }
+}
+
+------------
+
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.*;
+
+public class CsvUploaderTest {
+
+    @Mock
+    private S3Client s3Client;
+
+    @Mock
+    private Environment environment;
+
+    @InjectMocks
+    private CsvUploader csvUploader;
+
+    @BeforeEach
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void testUpload() throws IOException {
+        String csvFileName = "test.csv";
+        String tableName = "testTable";
+        String s3FolderPath = "2024-07-19/testTable/test.csv";
+        String uploadId = "uploadId123";
+        
+        CreateMultipartUploadResponse createResponse = CreateMultipartUploadResponse.builder()
+                .uploadId(uploadId)
+                .build();
+        when(environment.getRequiredProperty("s3.bucketName")).thenReturn("test-bucket");
+        when(environment.getRequiredProperty("currentdate")).thenReturn("2024-07-19");
+        when(s3Client.createMultipartUpload(any(CreateMultipartUploadRequest.class))).thenReturn(createResponse);
+
+        // Mock UploadPartResponseBuilder and its methods
+        UploadPartResponseBuilder mockBuilder = mock(UploadPartResponseBuilder.class);
+        when(mockBuilder.buildParts(anyString(), anyString(), anyString(), any(S3Client.class)))
+                .thenReturn(Collections.singletonList(CompletedPart.builder().partNumber(1).eTag("etag").build()));
+
+        // Replace the constructor call to UploadPartResponseBuilder with the mock
+        CsvUploader spyUploader = spy(csvUploader);
+        doReturn(mockBuilder).when(spyUploader).createUploadPartResponseBuilder(any(File.class), anyInt());
+
+        // Mock completeMultipartUpload response
+        CompleteMultipartUploadResponse completeResponse = CompleteMultipartUploadResponse.builder().build();
+        when(s3Client.completeMultipartUpload(any(CompleteMultipartUploadRequest.class))).thenReturn(completeResponse);
+
+        // Perform the upload
+        spyUploader.upload(csvFileName, tableName);
+
+        // Verify interactions with S3Client
+        ArgumentCaptor<CreateMultipartUploadRequest> createRequestCaptor = ArgumentCaptor.forClass(CreateMultipartUploadRequest.class);
+        verify(s3Client).createMultipartUpload(createRequestCaptor.capture());
+        assertEquals("test-bucket", createRequestCaptor.getValue().bucket());
+        assertEquals(s3FolderPath, createRequestCaptor.getValue().key());
+
+        ArgumentCaptor<CompleteMultipartUploadRequest> completeRequestCaptor = ArgumentCaptor.forClass(CompleteMultipartUploadRequest.class);
+        verify(s3Client).completeMultipartUpload(completeRequestCaptor.capture());
+        assertEquals("test-bucket", completeRequestCaptor.getValue().bucket());
+        assertEquals(s3FolderPath, completeRequestCaptor.getValue().key());
+        assertEquals(uploadId, completeRequestCaptor.getValue().uploadId());
+    }
+}
+
+
