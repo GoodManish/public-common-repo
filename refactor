@@ -1,0 +1,109 @@
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+
+public class UploadPartResponseBuilder implements AutoCloseable {
+
+    private final RandomAccessFile randomAccessFile;
+    private final ByteBuffer buffer;
+    private long position;
+
+    public UploadPartResponseBuilder(File file, int bufferSize) throws IOException {
+        this.randomAccessFile = new RandomAccessFile(file, "r");
+        this.buffer = ByteBuffer.allocate(bufferSize);
+        this.position = 0;
+    }
+
+    public List<CompletedPart> buildParts(String bucketName, String s3FolderPath, String uploadId, S3Client s3Client) throws IOException {
+        List<CompletedPart> completedParts = new ArrayList<>();
+        int partNumber = 1;
+
+        long fileSize = randomAccessFile.length();
+
+        while (position < fileSize) {
+            randomAccessFile.seek(position);
+            int bytesRead = randomAccessFile.getChannel().read(buffer);
+            buffer.flip();
+
+            UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
+                    .bucket(bucketName)
+                    .key(s3FolderPath)
+                    .uploadId(uploadId)
+                    .partNumber(partNumber)
+                    .contentLength((long) bytesRead)
+                    .build();
+
+            UploadPartResponse response = s3Client.uploadPart(uploadPartRequest, RequestBody.fromByteBuffer(buffer));
+            completedParts.add(CompletedPart.builder()
+                    .partNumber(partNumber)
+                    .eTag(response.eTag())
+                    .build());
+
+            buffer.clear();
+            position += bytesRead;
+            partNumber++;
+        }
+
+        return completedParts;
+    }
+
+    @Override
+    public void close() throws IOException {
+        randomAccessFile.close();
+    }
+}
+------------------------------------------
+
+@Service
+@Slf4j
+public class CsvUploader {
+
+    private final String bucketName;
+    private final S3Client s3Client;
+    private final String currentDate;
+
+    public CsvUploader(@Qualifier("s3Client") S3Client s3Client, Environment environment) {
+        this.s3Client = s3Client;
+        this.bucketName = environment.getRequiredProperty("s3.bucketName");
+        this.currentDate = environment.getRequiredProperty("currentdate");
+    }
+
+    public void upload(String csvFileName, String tableName) throws IOException {
+        File file = new File(csvFileName);
+        String s3FolderPath = Util.getCurrentDateString(currentDate) + "/" + Util.getFolderNameFromTableName(tableName) + "/" + csvFileName;
+
+        // Initiate a multipart upload
+        CreateMultipartUploadRequest createRequest = CreateMultipartUploadRequest.builder()
+                .bucket(bucketName)
+                .key(s3FolderPath)
+                .build();
+
+        CreateMultipartUploadResponse createResponse = s3Client.createMultipartUpload(createRequest);
+        String uploadId = createResponse.uploadId();
+
+        // Use UploadPartResponseBuilder to upload parts
+        List<CompletedPart> completedParts;
+        try (UploadPartResponseBuilder builder = new UploadPartResponseBuilder(file, 5 * 1024 * 1024)) {
+            completedParts = builder.buildParts(bucketName, s3FolderPath, uploadId, s3Client);
+        }
+
+        // Complete the multipart upload
+        CompletedMultipartUpload completedUpload = CompletedMultipartUpload.builder()
+                .parts(completedParts)
+                .build();
+
+        CompleteMultipartUploadRequest completeRequest = CompleteMultipartUploadRequest.builder()
+                .bucket(bucketName)
+                .key(s3FolderPath)
+                .uploadId(uploadId)
+                .multipartUpload(completedUpload)
+                .build();
+
+        CompleteMultipartUploadResponse completeResponse = s3Client.completeMultipartUpload(completeRequest);
+
+        System.out.println("Uploaded object URL: " + csvFileName + " - " + file.toPath());
+    }
+}
