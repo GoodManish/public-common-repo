@@ -1,0 +1,43 @@
+package com.socgen.gtba.lucidlink.refactor;
+
+
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Utilities;
+import software.amazon.awssdk.services.s3.model.GetUrlRequest;
+
+import java.net.MalformedURLException;
+import java.net.URL;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
+
+class S3Test {
+
+    @Test
+    void testGetUrl() throws MalformedURLException {
+        // Mock the AmazonS3 object
+        S3Client s3 = mock(S3Client.class);
+        
+        // Mock the S3Utilities object
+        S3Utilities utilities = mock(S3Utilities.class);
+        
+        // Define the behavior of s3.utilities()
+        when(s3.utilities()).thenReturn(utilities);
+        
+        // Define the behavior of utilities.getUrl()
+        URL mockUrl = new URL("https://mock-url.com");
+        when(utilities.getUrl(any(GetUrlRequest.class))).thenReturn(mockUrl);
+        
+        // Call the method under test
+        URL url = s3.utilities().getUrl(GetUrlRequest.builder().bucket("testBucket").key("testKey").build());
+
+        // Verify the result
+        assertEquals("https://mock-url.com", url.toString());
+        
+        // Verify interactions
+        verify(s3).utilities();
+        verify(utilities).getUrl(any(GetUrlRequest.class));
+    }
+}
