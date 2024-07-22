@@ -50,4 +50,9 @@ public enum SqlConditionEnum {
     }
 }
 --------------------------------
+sql:
+  bankingDateRecidCondition: ${BANKING_DATE_RECID_CONDITION: " WHERE (\"RECID\" LIKE 'HK%') AND \"BANKING_DATE_TL\" = "}
+  bankingDateCondition: ${BANKING_DATE_CONDITION: " WHERE \"BANKING_DATE_TL\" = "}
+  recidCondition: ${RECID_CONDITION: " WHERE \"RECID\" LIKE 'HK%'"}
+  noCondition: ${NO_CONDITION: ""}
 
