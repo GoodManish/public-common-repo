@@ -1,0 +1,53 @@
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+
+import javax.annotation.PostConstruct;
+
+@Configuration
+public class SqlConditionEnumConfig {
+
+    private final Environment env;
+
+    public SqlConditionEnumConfig(Environment env) {
+        this.env = env;
+    }
+
+    @PostConstruct
+    public void init() {
+        SqlConditionEnum.initConditions(env);
+    }
+}
+
+--------------------
+
+import org.springframework.core.env.Environment;
+
+public enum SqlConditionEnum {
+    BANKING_DT_RECID_CONDITION("sql.condition.bankingDtRecidCondition"),
+    BANKING_DT_CONDITION("sql.condition.bankingDtCondition"),
+    RECID_CONDITION("sql.condition.recidCondition"),
+    NO_CONDITION("sql.condition.noCondition");
+
+    private final String conditionKey;
+    private String condition;
+
+    SqlConditionEnum(String conditionKey) {
+        this.conditionKey = conditionKey;
+    }
+
+    public String getCondition() {
+        return condition;
+    }
+
+    private void initCondition(Environment env) {
+        this.condition = env.getProperty(conditionKey);
+    }
+
+    public static void initConditions(Environment env) {
+        for (SqlConditionEnum value : SqlConditionEnum.values()) {
+            value.initCondition(env);
+        }
+    }
+}
+--------------------------------
+
