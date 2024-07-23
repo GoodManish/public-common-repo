@@ -1,0 +1,45 @@
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Component;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Component
+public class SqlConditionEnumConfig {
+
+    private final Environment env;
+
+    public SqlConditionEnumConfig(Environment env) {
+        this.env = env;
+        initializeSqlConditions();
+    }
+
+    private void initializeSqlConditions() {
+        Map<SqlConditionEnum, String> conditions = new HashMap<>();
+        conditions.put(SqlConditionEnum.BANKING_DT_RECID_CONDITION, env.getProperty("sql.bankingDateRecidCondition"));
+        conditions.put(SqlConditionEnum.BANKING_DT_CONDITION, env.getProperty("sql.bankingDateCondition"));
+        conditions.put(SqlConditionEnum.RECID_CONDITION, env.getProperty("sql.recidCondition"));
+        conditions.put(SqlConditionEnum.NO_CONDITION, env.getProperty("sql.noCondition"));
+
+        SqlConditionEnum.initConditions(conditions);
+    }
+}
+
+public enum SqlConditionEnum {
+    BANKING_DT_RECID_CONDITION,
+    BANKING_DT_CONDITION,
+    RECID_CONDITION,
+    NO_CONDITION;
+
+    private String condition;
+
+    public String getCondition() {
+        return condition;
+    }
+
+    public static void initConditions(Map<SqlConditionEnum, String> conditions) {
+        for (Map.Entry<SqlConditionEnum, String> entry : conditions.entrySet()) {
+            entry.getKey().condition = entry.getValue();
+        }
+    }
+}
