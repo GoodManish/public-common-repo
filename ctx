@@ -1,0 +1,40 @@
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.core.env.Environment;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(SpringExtension.class)
+@SpringBootTest(classes = SqlConditionEnumConfig.class)
+public class SqlConditionEnumConfigTest {
+
+    @MockBean
+    private Environment env;
+
+    @Autowired
+    private SqlConditionEnumConfig sqlConditionEnumConfig;
+
+    @Test
+    public void testSqlConditionEnumConfig() {
+        // Mock the environment properties
+        when(env.getProperty("sql.bankingDateRecidCondition")).thenReturn(" WHERE (\"RECID\" LIKE 'HK%') AND \"BANKING_DATE_TL\" = ");
+        when(env.getProperty("sql.bankingDateCondition")).thenReturn(" WHERE \"BANKING_DATE_TL\" = ");
+        when(env.getProperty("sql.recidCondition")).thenReturn(" WHERE \"RECID\" LIKE 'HK%'");
+        when(env.getProperty("sql.noCondition")).thenReturn("");
+
+        // Initialize the SQL conditions
+        sqlConditionEnumConfig.initializeSqlConditions();
+
+        // Verify that the conditions are correctly set
+        assertEquals(" WHERE (\"RECID\" LIKE 'HK%') AND \"BANKING_DATE_TL\" = ", SqlConditionEnum.BANKING_DT_RECID_CONDITION.getCondition());
+        assertEquals(" WHERE \"BANKING_DATE_TL\" = ", SqlConditionEnum.BANKING_DT_CONDITION.getCondition());
+        assertEquals(" WHERE \"RECID\" LIKE 'HK%'", SqlConditionEnum.RECID_CONDITION.getCondition());
+        assertEquals("", SqlConditionEnum.NO_CONDITION.getCondition());
+    }
+}
