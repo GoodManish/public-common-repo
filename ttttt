@@ -1,0 +1,25 @@
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+
+public class DateConverter {
+    public static void main(String[] args) {
+        String yyyymmdd = "20240729";
+        
+        // Define the input and output formatters
+        DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+        DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+        
+        try {
+            // Parse the input date string to LocalDate
+            LocalDate date = LocalDate.parse(yyyymmdd, inputFormatter);
+            
+            // Format the LocalDate to the desired output format
+            String formattedDate = date.format(outputFormatter);
+            
+            System.out.println("Converted date: " + formattedDate);
+        } catch (DateTimeParseException e) {
+            System.err.println("Invalid date format: " + yyyymmdd);
+        }
+    }
+}
