@@ -1,0 +1,9 @@
+Create WMQ queue for connectivity between Swing and Transact for payments message and acknowledgment in production environment.
+
+DescriptionWe need to create a WebSphere MQ (WMQ) queue to facilitate communication between the Swing application and the Transact system. This queue will be used for sending payment messages and receiving acknowledgments.The SEIA team has already shared an MQ script with the MQ team for queue creation, and the script is attached to the Unity ticket.
+
+Acceptance CriteriaThe WMQ queue is created in the production environment using the provided script.The queue is configured to handle payment messages and acknowledgments between Swing and Transact.Ensure that the queue is secure and follows the company's compliance policies.Documentation is updated to include details of the new queue configuration.
+
+TasksQueue Creation:MQ team to execute the provided MQ script to create the queue.
+Configure Connectivity:Set up the necessary channels and listeners for the queue.Ensure that the Swing application can send messages to the queue.Ensure that the Transact system can receive messages and send acknowledgments.
+Testing:Perform connectivity tests between Swing and Transact using the new queue.Verify that payment messages are sent and acknowledgments are received correctly.Documentation:Update the system documentation to include details about the new WMQ queue and its configuration.NotesRefer to the attached Unity ticket for the MQ script and any additional requirements or details.Coordinate with the infrastructure team for any necessary support during the queue configuration process.
