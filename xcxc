@@ -1,0 +1,1 @@
+According to the last call with John, it is assumed that the issue of the browser not loading occurs only with "COS.OPS". However, when the page is refreshed, it loads successfully. Therefore, Migr can be used with this consideration in mind.
