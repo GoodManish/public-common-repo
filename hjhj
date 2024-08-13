@@ -1,0 +1,21 @@
+Both brokers should be configured as a network of brokers. This means they will forward messages to each other, and consumers connected to either broker can receive messages.
+
+Example configuration in activemq.xml:
+
+
+
+<broker xmlns="http://activemq.apache.org/schema/core" brokerName="srxbomtema71" dataDirectory="${activemq.data}">
+
+    <networkConnectors>
+        <networkConnector name="bridge-to-drx" uri="static:(tcp://drxbomtema71.socgen.com:61616)" duplex="true"/>
+    </networkConnectors>
+
+</broker>
+
+<broker xmlns="http://activemq.apache.org/schema/core" brokerName="drxbomtema71" dataDirectory="${activemq.data}">
+
+    <networkConnectors>
+        <networkConnector name="bridge-to-srx" uri="static:(tcp://srxbomtema71.socgen.com:61616)" duplex="true"/>
+    </networkConnectors>
+
+</broker>
