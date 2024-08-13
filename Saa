@@ -1,0 +1,124 @@
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.ByteArrayInputStream;
+
+public class XmlTagExtractor {
+
+    /**
+     * Extracts the value of the specified tag from the given XML string.
+     *
+     * @param xmlString The XML content as a string.
+     * @param tagName   The name of the tag to extract.
+     * @return The value of the tag, or null if not found.
+     * @throws Exception If an error occurs while parsing the XML.
+     */
+    public static String extractTagValue(String xmlString, String tagName) throws Exception {
+        // Parse the XML string
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true); // Handle namespaces
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        Document document = builder.parse(new ByteArrayInputStream(xmlString.getBytes()));
+
+        // Get a list of elements by tag name
+        NodeList nodeList = document.getElementsByTagNameNS("*", tagName);
+
+        // Return the text content of the first matching element, if found
+        if (nodeList != null && nodeList.getLength() > 0) {
+            Node node = nodeList.item(0);
+            if (node != null) {
+                return node.getTextContent();
+            }
+        }
+
+        return null; // Tag not found
+    }
+
+    public static void main(String[] args) {
+        String xmlString = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<Saa:DataPDU xmlns:Saa=\"http://example.com/saaschema\">"
+                + "<Saa:Header>"
+                + "<Saa:MessageID>202408100001</Saa:MessageID>"
+                + "<Saa:CreationDateTime>2024-08-10T14:45:00Z</Saa:CreationDateTime>"
+                + "<Saa:Sender>BANKXXXXXXX</Saa:Sender>"
+                + "<Saa:Receiver>RECVBANKXXX</Saa:Receiver>"
+                + "</Saa:Header>"
+                + "<Saa:Payload>"
+                + "<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:pacs.002.001.09\">"
+                + "<FIToFIPmtStsRpt>"
+                + "<GrpHdr>"
+                + "<MsgId>202408100001</MsgId>"
+                + "<CreDtTm>2024-08-10T14:45:00Z</CreDtTm>"
+                + "<InstgAgt>"
+                + "<FinInstnId>"
+                + "<BICFI>BANKXXXXXXX</BICFI>"
+                + "</FinInstnId>"
+                + "</InstgAgt>"
+                + "<InstdAgt>"
+                + "<FinInstnId>"
+                + "<BICFI>RECVBANKXXX</BICFI>"
+                + "</FinInstnId>"
+                + "</InstdAgt>"
+                + "</GrpHdr>"
+                + "<OrgnlGrpInfAndSts>"
+                + "<OrgnlMsgId>2024081000001</OrgnlMsgId>"
+                + "<OrgnlMsgNmId>pacs.008.001.09</OrgnlMsgNmId>"
+                + "<OrgnlCreDtTm>2024-08-10T14:00:00Z</OrgnlCreDtTm>"
+                + "<GrpSts>RJCT</GrpSts>"
+                + "<StsRsnInf>"
+                + "<Orgtr>"
+                + "<OrgId>"
+                + "<Id>"
+                + "<OrgId>"
+                + "<Othr>"
+                + "<Id>RECVBANK</Id>"
+                + "</Othr>"
+                + "</OrgId>"
+                + "</Id>"
+                + "</OrgId>"
+                + "</Orgtr>"
+                + "<Rsn>"
+                + "<Cd>AC04</Cd>"
+                + "</Rsn>"
+                + "</StsRsnInf>"
+                + "</OrgnlGrpInfAndSts>"
+                + "<TxInfAndSts>"
+                + "<StsId>0001</StsId>"
+                + "<OrgnlInstrId>PAY0001</OrgnlInstrId>"
+                + "<OrgnlEndToEndId>E2E0001</OrgnlEndToEndId>"
+                + "<TxSts>RJCT</TxSts>"
+                + "<StsRsnInf>"
+                + "<Orgtr>"
+                + "<OrgId>"
+                + "<Id>"
+                + "<OrgId>"
+                + "<Othr>"
+                + "<Id>RECVBANK</Id>"
+                + "</Othr>"
+                + "</OrgId>"
+                + "</Id>"
+                + "</OrgId>"
+                + "</Orgtr>"
+                + "<Rsn>"
+                + "<Cd>AC04</Cd>"
+                + "</Rsn>"
+                + "</StsRsnInf>"
+                + "</TxInfAndSts>"
+                + "</FIToFIPmtStsRpt>"
+                + "</Document>"
+                + "</Saa:Payload>"
+                + "</Saa:DataPDU>";
+        
+        try {
+            String value = extractTagValue(xmlString, "OrgnlEndToEndId");
+            System.out.println("OrgnlEndToEndId: " + value);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
