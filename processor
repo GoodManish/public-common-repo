@@ -1,0 +1,70 @@
+import org.apache.camel.Exchange;
+import org.apache.camel.Processor;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Unmarshaller;
+import java.io.StringReader;
+
+public class PaymentMessageProcessor implements Processor {
+
+    @Override
+    public void process(Exchange exchange) throws Exception {
+        // Get the message body as a String (XML format)
+        String xmlBody = exchange.getIn().getBody(String.class);
+
+        // Convert XML to Java object
+        PaymentMessage paymentMessage = convertXmlToPaymentMessage(xmlBody);
+
+        // Print relevant information from the Java object
+        System.out.println("Transaction ID: " + paymentMessage.getTransactionId());
+        System.out.println("Sender: " + paymentMessage.getSender());
+        System.out.println("Receiver: " + paymentMessage.getReceiver());
+        // Add more fields as needed
+    }
+
+    private PaymentMessage convertXmlToPaymentMessage(String xml) throws JAXBException {
+        JAXBContext context = JAXBContext.newInstance(PaymentMessage.class);
+        Unmarshaller unmarshaller = context.createUnmarshaller();
+        StringReader reader = new StringReader(xml);
+        return (PaymentMessage) unmarshaller.unmarshal(reader);
+    }
+}
+
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+@XmlRootElement(name = "PaymentMessage")
+public class PaymentMessage {
+
+    private String transactionId;
+    private String sender;
+    private String receiver;
+
+    // Getters and setters
+    @XmlElement(name = "TransactionId")
+    public String getTransactionId() {
+        return transactionId;
+    }
+
+    public void setTransactionId(String transactionId) {
+        this.transactionId = transactionId;
+    }
+
+    @XmlElement(name = "Sender")
+    public String getSender() {
+        return sender;
+    }
+
+    public void setSender(String sender) {
+        this.sender = sender;
+    }
+
+    @XmlElement(name = "Receiver")
+    public String getReceiver() {
+        return receiver;
+    }
+
+    public void setReceiver(String receiver) {
+        this.receiver = receiver;
+    }
+}
