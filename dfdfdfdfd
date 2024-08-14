@@ -76,3 +76,47 @@ class XmlTagExtractorTest {
         assertEquals("Hello Namespace", result);
     }
 }
+
+
+-------------------
+package com.socgen.gtba.swingtee.processor;
+
+import com.socgen.gtba.swingtee.config.property.XmlTagExtractor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.camel.Exchange;
+import org.apache.camel.Processor;
+import org.springframework.stereotype.Component;
+
+@Slf4j
+@Component
+public class MxIncomingProcessor implements Processor {
+    private static final String EMPTY = "";
+    private static final String PSEUDO_ACK_NACK = "PseudoAckNack";
+    private static final String SENDER_REFERENCE = "SenderReference";
+    private static final String MESSAGE_IDENTIFFIER = "MessageIdentifier";
+
+
+    @Override
+    public void process(Exchange exchange) throws Exception {
+        String ackNack = EMPTY;
+        String senderReference = EMPTY;
+        String msgIdentifier = EMPTY;
+
+        try {
+            String xml = exchange.getIn().getBody(String.class);
+            ackNack = XmlTagExtractor.extractTagValue(xml, PSEUDO_ACK_NACK);
+            senderReference = XmlTagExtractor.extractTagValue(xml, SENDER_REFERENCE);
+            msgIdentifier = XmlTagExtractor.extractTagValue(xml, MESSAGE_IDENTIFFIER);
+
+            log.info("ackNack" + ackNack);
+            log.info("senderReference" + senderReference);
+            log.info("msgIdentifier" + msgIdentifier);
+
+        } catch (Exception e) {
+            log.error("error" + e.getMessage());
+        }
+
+
+    }
+}
+
