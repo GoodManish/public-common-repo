@@ -79,42 +79,66 @@ class XmlTagExtractorTest {
 
 
 -------------------
-package com.socgen.gtba.swingtee.processor;
-
 import com.socgen.gtba.swingtee.config.property.XmlTagExtractor;
-import lombok.extern.slf4j.Slf4j;
+import com.socgen.gtba.swingtee.processor.MxIncomingProcessor;
 import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
-import org.springframework.stereotype.Component;
+import org.apache.camel.Message;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-@Slf4j
-@Component
-public class MxIncomingProcessor implements Processor {
-    private static final String EMPTY = "";
-    private static final String PSEUDO_ACK_NACK = "PseudoAckNack";
-    private static final String SENDER_REFERENCE = "SenderReference";
-    private static final String MESSAGE_IDENTIFFIER = "MessageIdentifier";
+import static org.mockito.Mockito.*;
 
+class MxIncomingProcessorTest {
 
-    @Override
-    public void process(Exchange exchange) throws Exception {
-        String ackNack = EMPTY;
-        String senderReference = EMPTY;
-        String msgIdentifier = EMPTY;
+    @Mock
+    private Exchange exchange;
 
-        try {
-            String xml = exchange.getIn().getBody(String.class);
-            ackNack = XmlTagExtractor.extractTagValue(xml, PSEUDO_ACK_NACK);
-            senderReference = XmlTagExtractor.extractTagValue(xml, SENDER_REFERENCE);
-            msgIdentifier = XmlTagExtractor.extractTagValue(xml, MESSAGE_IDENTIFFIER);
+    @Mock
+    private Message message;
 
-            log.info("ackNack" + ackNack);
-            log.info("senderReference" + senderReference);
-            log.info("msgIdentifier" + msgIdentifier);
+    @InjectMocks
+    private MxIncomingProcessor processor;
 
-        } catch (Exception e) {
-            log.error("error" + e.getMessage());
-        }
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        when(exchange.getIn()).thenReturn(message);
+    }
+
+    @Test
+    void testProcess_SuccessfulExtraction() throws Exception {
+        String xml = "<root><PseudoAckNack>Acknowledged</PseudoAckNack><SenderReference>ABC123</SenderReference><MessageIdentifier>MSG001</MessageIdentifier></root>";
+
+        when(message.getBody(String.class)).thenReturn(xml);
+        when(XmlTagExtractor.extractTagValue(xml, "PseudoAckNack")).thenReturn("Acknowledged");
+        when(XmlTagExtractor.extractTagValue(xml, "SenderReference")).thenReturn("ABC123");
+        when(XmlTagExtractor.extractTagValue(xml, "MessageIdentifier")).thenReturn("MSG001");
+
+        processor.process(exchange);
+
+        verify(XmlTagExtractor, times(1)).extractTagValue(xml, "PseudoAckNack");
+        verify(XmlTagExtractor, times(1)).extractTagValue(xml, "SenderReference");
+        verify(XmlTagExtractor, times(1)).extractTagValue(xml, "MessageIdentifier");
+    }
+
+    @Test
+    void testProcess_ExceptionDuringExtraction() throws Exception {
+        String xml = "<root><PseudoAckNack>Acknowledged</PseudoAckNack><SenderReference>ABC123</SenderReference><MessageIdentifier>MSG001</MessageIdentifier></root>";
+
+        when(message.getBody(String.class)).thenReturn(xml);
+        when(XmlTagExtractor.extractTagValue(xml, "PseudoAckNack")).thenThrow(new RuntimeException("Error during extraction"));
+
+        processor.process(exchange);
+
+        verify(XmlTagExtractor, times(1)).extractTagValue(xml, "PseudoAckNack");
+        verify(XmlTagExtractor, never()).extractTagValue(xml, "SenderReference");
+        verify(XmlTagExtractor, never()).extractTagValue(xml, "MessageIdentifier");
+    }
+}
+
 
 
     }
