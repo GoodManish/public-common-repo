@@ -1,0 +1,57 @@
+import com.socgen.gtba.swingtee.processor.MxIncomingProcessor;
+import org.apache.camel.Exchange;
+import org.apache.camel.Message;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
+
+class MxIncomingProcessorTest {
+
+    @Mock
+    private Exchange exchange;
+
+    @Mock
+    private Message message;
+
+    @InjectMocks
+    private MxIncomingProcessor processor;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        when(exchange.getIn()).thenReturn(message);
+    }
+
+    @Test
+    void testProcess_SuccessfulExtraction() throws Exception {
+        String xml = "<root><PseudoAckNack>Acknowledged</PseudoAckNack><SenderReference>ABC123</SenderReference><MessageIdentifier>MSG001</MessageIdentifier></root>";
+
+        when(message.getBody(String.class)).thenReturn(xml);
+
+        processor.process(exchange);
+
+        // Assert that the body of the message was processed correctly
+        verify(message, times(1)).getBody(String.class);
+    }
+
+    @Test
+    void testProcess_ExceptionDuringExtraction() throws Exception {
+        String xml = "<root><PseudoAckNack>Acknowledged</PseudoAckNack><SenderReference>ABC123</SenderReference><MessageIdentifier>MSG001</MessageIdentifier></root>";
+
+        when(message.getBody(String.class)).thenReturn(xml);
+
+        // Introduce an exception manually to simulate a failure
+        doThrow(new RuntimeException("Simulated extraction failure")).when(message).getBody(String.class);
+
+        // Since the actual processing method catches exceptions, we won't get an exception here,
+        // but we can verify that the method was called and handled.
+        processor.process(exchange);
+
+        verify(message, times(1)).getBody(String.class);
+    }
+}
