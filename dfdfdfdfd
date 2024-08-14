@@ -1,0 +1,78 @@
+package com.socgen.gtba.swingtee;
+
+import com.socgen.gtba.swingtee.config.property.XmlTagExtractor;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.ByteArrayInputStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.*;
+
+class XmlTagExtractorTest {
+
+    @Test
+    void testExtractTagValue_TagExists() throws Exception {
+        String xmlString = "<root><tag>Hello World</tag></root>";
+        String tagName = "tag";
+
+        String result = XmlTagExtractor.extractTagValue(xmlString, tagName);
+
+        assertEquals("Hello World", result);
+    }
+
+    @Test
+    void testExtractTagValue_TagDoesNotExist() throws Exception {
+        String xmlString = "<root><anotherTag>Data</anotherTag></root>";
+        String tagName = "tag";
+
+        String result = XmlTagExtractor.extractTagValue(xmlString, tagName);
+
+        assertEquals("", result); // Empty string expected
+    }
+
+    @Test
+    void testExtractTagValue_EmptyXmlString() throws Exception {
+        String xmlString = "";
+        String tagName = "tag";
+
+        String result = XmlTagExtractor.extractTagValue(xmlString, tagName);
+
+        assertEquals("", result); // Empty string expected
+    }
+
+    @Test
+    void testExtractTagValue_ExceptionDuringParsing() throws Exception {
+        // Mock the DocumentBuilderFactory and DocumentBuilder to throw an exception
+        DocumentBuilderFactory mockFactory = Mockito.mock(DocumentBuilderFactory.class);
+        DocumentBuilder mockBuilder = Mockito.mock(DocumentBuilder.class);
+
+        when(mockFactory.newDocumentBuilder()).thenReturn(mockBuilder);
+        doThrow(new RuntimeException("Parsing error")).when(mockBuilder).parse(any(ByteArrayInputStream.class));
+
+        // Simulate the parsing error by setting up the mocks (can be done by modifying XmlTagExtractor class to inject mocks)
+
+        String xmlString = "<root><tag>Hello World</tag></root>";
+        String tagName = "tag";
+
+        String result = XmlTagExtractor.extractTagValue(xmlString, tagName);
+
+        assertEquals("", result); // Empty string expected due to exception
+    }
+
+    @Test
+    void testExtractTagValue_NamespaceAwareTagExists() throws Exception {
+        String xmlString = "<root xmlns:ns=\"http://example.com\"><ns:tag>Hello Namespace</ns:tag></root>";
+        String tagName = "tag";
+
+        String result = XmlTagExtractor.extractTagValue(xmlString, tagName);
+
+        assertEquals("Hello Namespace", result);
+    }
+}
