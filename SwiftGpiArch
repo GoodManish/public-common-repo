@@ -1,0 +1,91 @@
+Below is a real-time example of a SWIFT GPI payment, including specific bank names, customers involved, and other relevant details.
+
+Scenario Overview:
+	Customer: Alice Johnson, a business owner in New York, USA
+	Sending Bank: Chase Bank, USA (BIC: CHASUS33)
+
+	Receiving Bank: HSBC Bank, UK (BIC: HBUKGB4B)
+	Intermediary Bank: CitiBank, USA (BIC: CITIUS33)
+	Recipient: Bob Smith, a supplier based in London, UK
+
+
+Purpose of Payment
+Alice is making a payment of $10,000 to Bob for a shipment of goods.
+
+Detailed Flow
+1. Payment Initiation
+	Date: 27th August 2024
+	Amount: USD 10,000
+	Payment Type: Cross-border commercial payment
+	Purpose: Payment for goods (Invoice #INV-20240825)
+	Sending Bank: Chase Bank, USA (BIC: CHASUS33)
+	Receiving Bank: HSBC Bank, UK (BIC: HBUKGB4B)
+	Intermediary Bank: CitiBank, USA (BIC: CITIUS33)
+	
+	Action:
+	Alice logs into her Chase Bank online banking platform and initiates the payment by entering Bob's bank details and the payment amount. The payment is then submitted for processing.
+
+2. Message Creation and UETR Assignment
+	Message Type: MT103 (Single Customer Credit Transfer)
+	Unique End-to-End Transaction Reference (UETR): 123e4567-e89b-12d3-a456-426614174000
+	
+	Action:
+	Chase Bank’s payment system generates an MT103 message, enriched with all necessary information including Alice's account details, Bob's account at HSBC, the intermediary bank details, and the assigned UETR. This UETR is unique and will allow tracking of the payment across all banks involved.
+
+3. Transmission to SWIFT Network
+	Action:
+	The MT103 message is sent to the SWIFT network. The SWIFT network routes the message first to CitiBank (the intermediary bank) based on the routing rules and then to HSBC Bank.
+
+4. Processing by Intermediary Bank (CitiBank)
+	Action:
+	CitiBank receives the MT103 message and processes it by debiting Chase Bank's correspondent account and then forwarding the payment message to HSBC Bank.
+
+	Status Update:
+	CitiBank processes the payment and sends an acknowledgment back to Chase Bank and updates the GPI Tracker with the status.
+
+5. Payment Processing by Receiving Bank (HSBC)
+	Action:
+	HSBC Bank receives the MT103 message from CitiBank. They credit Bob’s account in GBP after converting the amount from USD, based on the exchange rate.
+
+	Status Update:
+	HSBC sends a status update through the SWIFT network, confirming that the payment has been credited to Bob's account. The GPI Tracker is updated accordingly.
+
+6. Customer Notification
+	Action:
+	Chase Bank receives the final status update from HSBC via the SWIFT network. The bank then notifies Alice via email or SMS that her payment has been successfully delivered to Bob's HSBC account in the UK.
+
+	Notification Message:
+	"Your payment of $10,000 (converted to GBP) to Bob Smith at HSBC Bank, UK has been successfully delivered on 27th August 2024. Transaction Reference: 123e4567-e89b-12d3-a456-426614174000."
+	
+7. GPI Tracker Update
+	Action:
+	The GPI Tracker, a cloud-based system managed by SWIFT, is updated in real-time throughout the process. This allows both Chase Bank and HSBC to monitor the status of the payment. Alice can also log into her online banking to check the status of the payment using the UETR.
+
+8. Reconciliation and Compliance
+	Action:
+	Chase Bank reconciles the payment against Alice's account, ensuring that all records match. Additionally, the payment details are logged for compliance purposes, ensuring adherence to anti-money laundering (AML) and know your customer (KYC) regulations.
+
+Key Points in This Example:
+End-to-End Tracking: The entire payment journey is tracked from initiation to settlement, with all involved banks updating the status in real-time.
+
+Transparency: Alice has full visibility into the payment status, thanks to the UETR. She can see when the payment is received by Bob, which enhances trust and reduces inquiries.
+
+Speed: The payment is processed quickly, potentially in minutes, depending on the banks' processing times and the SWIFT GPI service level agreements.
+
+Fee Transparency: Any fees deducted by intermediary banks are known upfront, allowing Alice to know the exact amount that will reach Bob.
+
+Security: The payment is secure, encrypted, and complies with all relevant international regulations.
+
+Diagram of the Payment Flow:
+Alice's Chase Bank Account  --->   CitiBank (Intermediary)  --->   Bob's HSBC Bank Account
+       (CHASUS33)                             (CITIUS33)                      (HBUKGB4B)
+           |                                      |                                  |
+           |         (UETR) Payment Tracking      |                                  |
+           |------------------------------------->|---------------------------------->|
+           |                                      |                                  |
+           |<-------------------------------------|<----------------------------------|
+           |                                      |                                  |
+  Notification: Payment Successful         Payment Processed                    Payment Credited
+
+Conclusion:-
+This example illustrates how a cross-border payment using SWIFT GPI is processed, providing end-to-end visibility, speed, and transparency. It showcases how SWIFT GPI enhances the traditional cross-border payment process by ensuring that all parties are informed and that the payment is traceable from start to finish.
