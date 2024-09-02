@@ -1,0 +1,68 @@
+Public and private keys are part of asymmetric encryption, which is used in various security protocols, including SSH (Secure Shell). Here's a detailed explanation with an example to clarify how they work.
+
+### Public and Private Key Pair
+- **Public Key**: This key can be shared with anyone. It’s used to encrypt data that only the corresponding private key can decrypt.
+- **Private Key**: This key is kept secret. It’s used to decrypt data that was encrypted with the public key or to sign data to prove the origin of the message.
+
+### How They Work Together
+- **Encryption**: If you encrypt data with someone's public key, only their private key can decrypt it. This ensures that only the intended recipient can read the message.
+- **Authentication**: If you sign data with your private key, anyone with your public key can verify that the data came from you. This ensures the integrity and authenticity of the message.
+
+### Example Scenario: SSH Authentication
+
+1. **Generating the Key Pair:**
+   - To use SSH key-based authentication, first, generate a key pair on your local machine.
+
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+   ```
+
+   - This command generates:
+     - A private key, typically stored at `~/.ssh/id_rsa`
+     - A public key, typically stored at `~/.ssh/id_rsa.pub`
+
+2. **Sharing the Public Key:**
+   - You copy your public key to the remote server where you want to connect. This is usually done with the `ssh-copy-id` command.
+
+   ```bash
+   ssh-copy-id mkumar5@srxbomtema71.in.world.socgen
+   ```
+
+   - Alternatively, you can manually add the public key to the `~/.ssh/authorized_keys` file on the remote server.
+
+3. **Connecting to the Remote Server:**
+   - Now, when you try to connect to the server using SSH, it will use your private key to authenticate.
+
+   ```bash
+   ssh mkumar5@srxbomtema71.in.world.socgen
+   ```
+
+   - The server checks the `authorized_keys` file for your public key. If it finds it, the server will encrypt a message using your public key and send it to your local machine.
+   - Your SSH client on your local machine uses your private key to decrypt this message. If the decryption is successful, you are authenticated and granted access without needing to enter a password.
+
+### Detailed Workflow of SSH Authentication with Keys:
+
+1. **Key Pair Generation:**
+   - You generate a key pair (`id_rsa` and `id_rsa.pub`).
+   - `id_rsa`: Private key (keep it secure).
+   - `id_rsa.pub`: Public key (can be shared).
+
+2. **Copying Public Key to Server:**
+   - The public key (`id_rsa.pub`) is copied to the remote server’s `~/.ssh/authorized_keys` file for the `mkumar5` user.
+
+3. **Connecting via SSH:**
+   - When you run `ssh mkumar5@srxbomtema71.in.world.socgen`, the server checks for the corresponding public key in `authorized_keys`.
+   - If it finds a match, the server sends an encrypted challenge message.
+   - Your local SSH client decrypts this message using your private key (`id_rsa`).
+   - If decryption is successful, you’re authenticated, and the connection is established.
+
+### Why Use Public/Private Keys?
+- **Security**: Private keys never leave your machine, making them more secure than passwords, which can be intercepted.
+- **Convenience**: Once set up, you can connect to remote servers without needing to enter your password every time.
+
+### Summary
+- **Public Key**: Shared with the remote server.
+- **Private Key**: Stays on your machine, used to authenticate when connecting to the server.
+- **SSH Process**: The server sends a challenge, your private key decrypts it, and if successful, you're authenticated.
+
+This key-based authentication is widely used because it's both secure and convenient, as it doesn't require you to enter a password each time.
