@@ -1,0 +1,34 @@
+package com.example.myapp;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+public class Test {
+
+    public static void main(String[] args) {
+
+        String ppGetBdrId = "123 44455";
+//        String ppGetBdrId = null;
+
+//        List<BdrId> bdrIds = Optional.ofNullable(ppGetBdrId)
+//                .map(bdrId -> Arrays.stream(bdrId.split(" "))
+//                        .map(id -> BdrId.builder().bdrId(id).build())
+//                        .collect(Collectors.toList()))
+//                .orElse(Collections.emptyList());
+//
+//        System.out.println("bdrIds = " + bdrIds);
+
+
+        List<BdrId> bdrIds = Arrays.stream(Optional.ofNullable(ppGetBdrId).orElse("").split(" "))
+                        .filter(id -> !id.trim().isEmpty())
+                        .map(id -> BdrId.builder().bdrId(id).build())
+                        .collect(Collectors.toList());
+
+
+        System.out.println("bdrIds = " + bdrIds);
+
+    }
+}
