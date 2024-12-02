@@ -1,0 +1,33 @@
+public class Main {
+    public static void main(String[] args) {
+        String var1 = "Curr";
+        String var2 = "0123465"; // String but holds integer/long value
+        String var3 = "NotANumber"; // Invalid value
+
+        String result = concatenateStrings(var1, var2, var3);
+        System.out.println(result); // Output: Curr.123465.
+    }
+
+    private static String concatenateStrings(String var1, String var2, String var3) {
+        // Validate and parse var2
+        var2 = isNumeric(var2) ? String.valueOf(Long.parseLong(var2)) : "";
+
+        // Validate and parse var3
+        var3 = isNumeric(var3) ? String.valueOf(Long.parseLong(var3)) : "";
+
+        // Concatenate values
+        return var1 + "." + var2 + "." + var3;
+    }
+
+    private static boolean isNumeric(String str) {
+        if (str == null || str.isEmpty()) {
+            return false;
+        }
+        try {
+            Long.parseLong(str); // Validate if the string can be parsed as a long
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+}
