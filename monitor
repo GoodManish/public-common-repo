@@ -1,0 +1,59 @@
+# Monitoring for Datalake-Feeder Application
+
+## **What is this about?**
+The Datalake-Feeder application is responsible for generating daily CSV files that are fed to various datalake interfaces, such as **FATCA CRS**, **GARLIQ**, and other compliance and operational systems. These files are uploaded to their respective **S3 buckets** to ensure seamless data flow for report generation in production.
+
+To ensure the successful delivery of these files, a monitoring mechanism is in place to verify their presence in the S3 buckets every morning. This document explains the monitoring process and its importance.
+
+---
+
+## **What’s the issue if files are not delivered?**
+If the application fails to generate and deliver the required files to the S3 bucket:
+- **Reports will not be generated** in the production environment for the respective interfaces (e.g., FATCA CRS, GARLIQ).
+- **Compliance and operational risks** may arise due to missing or incomplete data.
+- Stakeholders relying on the reports may face delays, impacting critical business operations.
+- While there are email alerts (watchers) to notify the team in case of delivery failures, proactive monitoring is necessary to avoid surprises.
+
+---
+
+## **When to monitor?**
+- Monitoring should be performed **every morning** after the expected file generation time.
+- Ideally, checks should be done **before 9:00 AM** to ensure timely resolution in case of delivery issues.
+
+---
+
+## **How to monitor?**
+### 1. **Using the Monitoring Script**
+- A dedicated monitoring script checks whether all required files have been delivered to their respective S3 buckets.
+- The script validates:
+  - **File presence**: Ensures that all expected files are available in the S3 bucket.
+  - **File timestamp**: Confirms that the files are from the current day (to avoid stale data).
+  
+### 2. **Steps to Perform Manual Monitoring**
+If you need to perform manual checks:
+1. **Log in to the S3 Management Console**:
+   - Navigate to the respective S3 bucket for the application.
+2. **Check for Today’s Files**:
+   - Verify that all expected files for the day are present.
+   - Cross-check the file names and timestamps.
+3. **Check Email Alerts**:
+   - Ensure there are no failure notifications from the watchers regarding file delivery.
+
+---
+
+## **What to do if an issue is detected?**
+1. **Investigate the Root Cause**:
+   - Check the application logs for errors during file generation or S3 upload.
+   - Confirm whether there were any infrastructure issues (e.g., network or S3 availability).
+2. **Manually Upload Missing Files**:
+   - Regenerate the files using the Datalake-Feeder application (if possible).
+   - Manually upload the files to the respective S3 bucket.
+3. **Notify Stakeholders**:
+   - Inform the affected teams about the issue and the expected resolution timeline.
+4. **Update Monitoring**:
+   - If necessary, update the monitoring script or process to handle similar issues proactively in the future.
+
+---
+
+## **Contact**
+For any issues or questions related to the monitoring process, please reach out to the **Datalake-Feeder Support Team** at [support@example.com](mailto:support@example.com).
