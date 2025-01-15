@@ -1,0 +1,226 @@
+package com.socgen.gtba.swingtee.route.builder.mx;
+
+import com.socgen.gtba.swingtee.config.mq.RabbitMQConfig;
+import com.socgen.gtba.swingtee.config.property.ActiveMQProperty;
+import com.socgen.gtba.swingtee.config.property.IbmMQueueDetail;
+import com.socgen.gtba.swingtee.route.builder.SwingRouteBuilder;
+import com.socgen.gtba.swingtee.filter.MessageFilter;  // Importing MessageFilter
+import org.apache.camel.CamelContext;
+import org.apache.camel.Exchange;
+import org.apache.camel.ExchangePattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
+
+import static com.socgen.gtba.swingtee.constant.Constant.*;
+import static org.apache.camel.LoggingLevel.ERROR;
+import static org.apache.camel.LoggingLevel.INFO;
+
+public class SwingRouteBuilder extends SwingRouteBuilder {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(SwingRouteBuilder.class);
+
+    private final String swingAckQueue;
+    private final String swingPriorityQueue;
+    private final String swingNonPriorityQueue;
+    private final String ibmJmsComponenetId;
+    private final String activeMqJmsComponenetId;
+    private final String transactMidwayQueue;
+    private final boolean isEnabled;
+    private final String entity;
+    private final String activeProfile;
+
+    private final MessageFilter messageFilter;  // Injected MessageFilter
+
+    @Autowired
+    public SwingRouteBuilder(CamelContext camelContext,
+                             RabbitMQConfig rabbitMQConfig,
+                             ActiveMQProperty activeMQProperty,
+                             IbmMQueueDetail ibmMQueueDetail,
+                             Environment environment,
+                             MessageFilter messageFilter) {
+        super(camelContext, rabbitMQConfig, activeMQProperty, ibmMQueueDetail, environment);
+        this.messageFilter = messageFilter;  // Injected filter
+
+        this.swingAckQueue = ibmMQueueDetail.getQueueAck();
+        this.swingPriorityQueue = ibmMQueueDetail.getQueuePriority();
+        this.swingNonPriorityQueue = ibmMQueueDetail.getQueueNonPriority();
+        this.ibmJmsComponenetId = ibmMQueueDetail.getJmsComponentId();
+        this.transactMidwayQueue = activeMQProperty.getQueueMidway();
+        this.activeMqJmsComponenetId = activeMQProperty.getJmsComponentId();
+        this.isEnabled = ibmMQueueDetail.isFlowEnabled();
+        this.entity = ibmMQueueDetail.getEntity();
+        this.activeProfile = environment.getRequiredProperty("spring.profiles.active");
+    }
+
+    @Override
+    public void configure() throws Exception {
+        String body = activeProfile.contains(PROD) ? "" : "${body}";
+
+        this.errorHandler(entity);
+
+        LOGGER.info("Inside SwingTee Route builder - {}", entity);
+
+        if (!isEnabled) {
+            LOGGER.info("Flow is disabled for {}", entity);
+            return;
+        }
+
+        // Using filter logic in routes
+        from(ibmJmsComponenetId + swingAckQueue)
+            .setExchangePattern(ExchangePattern.InOnly)
+            .filter().method(messageFilter, "filterMessages") // Apply the filter method
+            .log(INFO, String.format(SWING_ACK_MESSAGE, swingAckQueue, body))
+            .multicast()
+            .parallelProcessing()
+            .to(activeMqJmsComponenetId + transactMidwayQueue)
+            .log(INFO, TRANSACT_MX_ACK_MESSAGE)
+        .end();
+
+        from(ibmJmsComponenetId + swingPriorityQueue)
+            .setExchangePattern(ExchangePattern.InOnly)
+            .filter().method(messageFilter, "filterMessages") // Apply the filter method
+            .log(INFO, String.format(SWING_ACK_MESSAGE, swingPriorityQueue, body))
+            .multicast()
+            .parallelProcessing()
+            .to(activeMqJmsComponenetId + transactMidwayQueue)
+            .log(INFO, TRANSACT_MX_ACK_MESSAGE)
+        .end();
+
+        from(ibmJmsComponenetId + swingNonPriorityQueue)
+            .setExchangePattern(ExchangePattern.InOnly)
+            .filter().method(messageFilter, "filterMessages") // Apply the filter method
+            .log(INFO, String.format(SWING_ACK_MESSAGE, swingNonPriorityQueue, body))
+            .multicast()
+            .parallelProcessing()
+            .to(activeMqJmsComponenetId + transactMidwayQueue)
+            .log(INFO, TRANSACT_MX_ACK_MESSAGE)
+        .end();
+    }
+}
+
+
+---
+
+import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.ExchangePattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+public class SwingRouteBuilder extends RouteBuilder {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(SwingRouteBuilder.class);
+
+    private final MessageFilter messageFilter;  // Injected filter
+
+    private final String deadQueueHost;
+    private final Integer deadQueuePort;
+    private final String deadLetterQueue;
+    private final String deadQueueExchange;
+    private final String deadQueueRoutingKey;
+    private final String deadQueueUsername;
+    private final String deadQueuePassword;
+    private final ActiveMQProperty activeMQProperty;
+    private final IbmMQueueDetail ibmMQueueDetail;
+    private final String activeProfile;
+
+    @Autowired
+    public SwingRouteBuilder(final CamelContext camelContext,
+                             RabbitMQConfig rabbitMQConfig,
+                             ActiveMQProperty activeMQProperty,
+                             IbmMQueueDetail ibmMQueueDetail, 
+                             final Environment environment,
+                             MessageFilter messageFilter) {
+        super(camelContext);
+        this.messageFilter = messageFilter;  // Injected dependency
+
+        this.deadQueueHost = rabbitMQConfig.getRabbitMqHost();
+        this.deadQueuePort = rabbitMQConfig.getRabbitMqPort();
+        this.deadLetterQueue = rabbitMQConfig.getRabbitMqQueue();
+        this.deadQueueExchange = rabbitMQConfig.getRabbitMqExchange();
+        this.deadQueueRoutingKey = rabbitMQConfig.getRabbitMqRoutingKey();
+        this.deadQueueUsername = rabbitMQConfig.getRabbitMqUser();
+        this.deadQueuePassword = rabbitMQConfig.getRabbitMqPassword();
+        this.activeMQProperty = activeMQProperty;
+        this.ibmMQueueDetail = ibmMQueueDetail;
+        this.activeProfile = environment.getRequiredProperty("spring.profiles.active");
+    }
+
+    @Override
+    public void configure() throws Exception {
+        String sourceQueue = ibmMQueueDetail.getQueue();
+        String entity = ibmMQueueDetail.getEntity();
+        String ibmJmsComponentId = ibmMQueueDetail.getJmsComponentId();
+        String transactQueue = activeMQProperty.getQueueTransact();
+        String activeMQJmsComponentId = activeMQProperty.getJmsComponentId();
+        boolean isEnabled = ibmMQueueDetail.isFlowEnabled();
+        String body = activeProfile.contains(PROD) ? "" : "${body}";
+
+        this.errorHandler(entity);
+
+        LOGGER.info("Inside SwingTee Route builder for {}", entity);
+
+        if (!isEnabled) {
+            LOGGER.info("Flow is disabled for {}", entity);
+            return;
+        }
+
+        from(ibmJmsComponentId + sourceQueue)
+            .setExchangePattern(ExchangePattern.InOnly)
+            .filter().method(messageFilter, "filterMessages") // Apply the injected filter
+            .log(INFO, String.format(SWING_ACK_MESSAGE, sourceQueue, body))
+            .multicast()
+            .parallelProcessing()
+            .to(activeMQJmsComponentId + transactQueue)
+            .log(INFO, TRANSACT_MT_ACK_MESSAGE)
+        .end();
+    }
+
+    @Override
+    public void errorHandler(String entity) {
+        final String RABBIT_ERROR_URI = "rabbitmq://" + deadQueueHost + ":" + deadQueuePort + "/" + deadQueueExchange + "?"
+                + "queue=" + deadLetterQueue + "&username=" + deadQueueUsername + "&password=" + deadQueuePassword + "&routingKey=" + deadQueueRoutingKey
+                + "&autoDelete=false&sslProtocol=TLSv1.2";
+
+        errorHandler(deadLetterChannel(RABBIT_ERROR_URI)
+                .maximumRedeliveries(3)
+                .redeliveryDelay(2000)
+                .retryAttemptedLogLevel(ERROR)
+                .onExceptionOccurred(exchange -> exchange.getMessage().setHeader(TO_END_POINT_HEADER, exchange.getProperty(Exchange.TO_ENDPOINT))));
+    }
+}
+---------------
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+import java.util.Arrays;
+import java.util.List;
+
+@Component
+public class MessageFilter {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(MessageFilter.class);
+
+    private static final List<String> FILTER_STRINGS = Arrays.asList(
+        "SOGEHKHHXXX", "SOGEHKHH", "SOGESGSGXXX", "SOGESGSG", "SOGEINBBXXX", "SOGEINBB"
+    );
+
+    // Method to filter messages
+    public boolean filterMessages(String body, String entity) {
+        if (body == null) {
+            return true; // Allow null messages to pass
+        }
+
+        boolean containsFilteredString = FILTER_STRINGS.stream().anyMatch(body::contains);
+        if (containsFilteredString) {
+            LOGGER.info("Message filtered out for entity {}: {}", entity, body);
+        }
+
+        return !containsFilteredString; // Allow message only if it does not contain filtered strings
+    }
+}
