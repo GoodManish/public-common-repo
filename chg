@@ -98,3 +98,107 @@ public class SwingRouteBuilder extends com.socgen.gtba.swingtee.route.builder.Sw
             .end();
     }
 }
+
+
+--------
+
+import org.apache.camel.builder.RouteBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
+
+import java.util.Arrays;
+import java.util.List;
+
+public class SwingRouteBuilder extends com.socgen.gtba.swingtee.route.builder.SwingRouteBuilder {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(SwingRouteBuilder.class);
+
+    private static final List<String> FILTER_STRINGS = Arrays.asList(
+        "SOGEHKHHXXX", "SOGEHKHH", "SOGESGSGXXX", "SOGESGSG", "SOGEINBBXXX", "SOGEINBB"
+    );
+
+    private final String swingAckQueue;
+    private final String swingPriorityQueue;
+    private final String swingNonPriorityQueue;
+    private final String ibmJmsComponenetId;
+    private final String activeMqJmsComponenetId;
+    private final String transactMidwayQueue;
+    private final boolean isEnabled;
+    private final String entity;
+    private final String activeProfile;
+
+    public SwingRouteBuilder(CamelContext camelContext,
+                             RabbitMQConfig rabbitMQConfig,
+                             ActiveMQProperty activeMQProperty,
+                             IbmMQueueDetail ibmMQueueDetail,
+                             Environment environment) {
+        super(camelContext, rabbitMQConfig, activeMQProperty, ibmMQueueDetail, environment);
+        this.swingAckQueue = ibmMQueueDetail.getQueueAck();
+        this.swingPriorityQueue = ibmMQueueDetail.getQueuePriority();
+        this.swingNonPriorityQueue = ibmMQueueDetail.getQueueNonPriority();
+        this.ibmJmsComponenetId = ibmMQueueDetail.getJmsComponentId();
+        this.transactMidwayQueue = activeMQProperty.getQueueMidway();
+        this.activeMqJmsComponenetId = activeMQProperty.getJmsComponentId();
+        this.isEnabled = ibmMQueueDetail.isFlowEnabled();
+        this.entity = ibmMQueueDetail.getEntity();
+        this.activeProfile = environment.getRequiredProperty("spring.profiles.active");
+    }
+
+    @Override
+    public void configure() throws Exception {
+        String body = activeProfile.contains(PROD) ? "" : "${body}";
+
+        this.errorHandler(entity);
+
+        LOGGER.info("Inside SwingTee Route builder - {}", entity);
+
+        if (!isEnabled) {
+            LOGGER.info("Flow is disabled for {}", entity);
+            return;
+        }
+
+        from(ibmJmsComponenetId + swingAckQueue)
+            .setExchangePattern(ExchangePattern.InOnly)
+            .filter().method(this, "filterMessages") // Filter messages
+                .log(INFO, String.format(SWING_ACK_MESSAGE, swingAckQueue, body))
+                .multicast()
+                .parallelProcessing()
+                .to(activeMqJmsComponenetId + transactMidwayQueue)
+                .log(INFO, TRANSACT_MX_ACK_MESSAGE)
+            .end();
+
+        from(ibmJmsComponenetId + swingPriorityQueue)
+            .setExchangePattern(ExchangePattern.InOnly)
+            .filter().method(this, "filterMessages") // Filter messages
+                .log(INFO, String.format(SWING_ACK_MESSAGE, swingPriorityQueue, body))
+                .multicast()
+                .parallelProcessing()
+                .to(activeMqJmsComponenetId + transactMidwayQueue)
+                .log(INFO, TRANSACT_MX_ACK_MESSAGE)
+            .end();
+
+        from(ibmJmsComponenetId + swingNonPriorityQueue)
+            .setExchangePattern(ExchangePattern.InOnly)
+            .filter().method(this, "filterMessages") // Filter messages
+                .log(INFO, String.format(SWING_ACK_MESSAGE, swingNonPriorityQueue, body))
+                .multicast()
+                .parallelProcessing()
+                .to(activeMqJmsComponenetId + transactMidwayQueue)
+                .log(INFO, TRANSACT_MX_ACK_MESSAGE)
+            .end();
+    }
+
+    // Method for filtering messages
+    public boolean filterMessages(String body) {
+        if (body == null) {
+            return true; // Allow null messages to pass
+        }
+        boolean containsFilteredString = FILTER_STRINGS.stream().anyMatch(body::contains);
+        if (containsFilteredString) {
+            LOGGER.info("Message filtered out: {}", body);
+        }
+        return !containsFilteredString; // Allow message only if it does not contain filtered strings
+    }
+}
+
