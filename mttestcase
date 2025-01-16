@@ -1,0 +1,53 @@
+
+
+import com.socgen.gtba.swingtee.processor.MtIncomingMsgFilter;
+import org.apache.camel.Exchange;
+import org.apache.camel.Message;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static com.socgen.gtba.swing.constant.Constant.BIC_FILTER;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class MtIncomingMsgFilterTest {
+
+    @InjectMocks
+    private MtIncomingMsgFilter mtIncomingMsgFilter;
+
+    @Mock
+    private Exchange mockExchange;
+
+    @Mock
+    private Message mockMessage;
+
+    @ParameterizedTest
+    @CsvSource({
+            ":58A:KOGEHKHHXXX, true",   // Matching BIC
+            ":58A:NONMATCHBIC, false", // Non-matching BIC
+            ":58A:, false",            // Empty tag content
+            "random text, false"       // No matching tag
+    })
+    void testProcess(String messageBody, boolean routeStopExpected) {
+        when(mockExchange.getIn()).thenReturn(mockMessage);
+        when(mockMessage.getBody(String.class)).thenReturn(messageBody);
+
+        mtIncomingMsgFilter.process(mockExchange);
+
+        if (routeStopExpected) {
+            verify(mockExchange).setProperty(Exchange.ROUTE_STOP, true);
+        } else {
+            verify(mockExchange, never()).setProperty(Exchange.ROUTE_STOP, true);
+        }
+
+        verify(mockMessage, times(1)).getBody(String.class);
+    }
+
+}
