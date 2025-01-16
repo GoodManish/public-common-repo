@@ -1,0 +1,62 @@
+package com.socgen.gtba.swingtee;
+
+import com.socgen.gtba.swingtee.processor.MxIncomingMsgFilter;
+import org.apache.camel.Exchange;
+import org.apache.camel.Message;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.stream.Stream;
+
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class MxIncomingMsgFilterTest {
+
+    @InjectMocks
+    private MxIncomingMsgFilter mxIncomingMsgFilter;
+
+    @Mock
+    private Exchange mockExchange;
+
+    @Mock
+    private Message mockMessage;
+
+    @ParameterizedTest
+    @MethodSource("provideTestCases")
+    void testProcess(String messageBody, boolean shouldStopRoute) throws Exception {
+        // Arrange
+        when(mockExchange.getIn()).thenReturn(mockMessage);
+        when(mockMessage.getBody(String.class)).thenReturn(messageBody);
+
+        // Act
+        mxIncomingMsgFilter.process(mockExchange);
+
+        // Assert
+        if (shouldStopRoute) {
+            verify(mockExchange).setProperty(Exchange.ROUTE_STOP, true);
+        } else {
+            verify(mockExchange, never()).setProperty(Exchange.ROUTE_STOP, true);
+        }
+        verify(mockMessage, times(1)).getBody(String.class);
+    }
+
+    private static Stream<Arguments> provideTestCases() {
+        return Stream.of(
+                // Matching BIC
+                Arguments.of("<Cdtr><FinInstnId>KOGEHKHHXXX</FinInstnId></Cdtr>", true),
+                // No matching BIC
+                Arguments.of("<Cdtr><FinInstnId>NO_MATCH_BIC</FinInstnId></Cdtr>", false),
+                // No <Cdtr> tag
+                Arguments.of("<RandomTag><FinInstnId>BIC12345</FinInstnId></RandomTag>", false),
+                // Empty body
+                Arguments.of("", false)
+        );
+    }
+}
