@@ -1,0 +1,34 @@
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class ExtractString {
+    public static void main(String[] args) {
+        // Sample XML content
+        String xmlContent = 
+            "<Cdtr>\n" +
+            "    <FinInstnId>\n" +
+            "        <BICFI>SOGEKHHXXXX</BICFI>\n" +
+            "        <LEI>O2RNE8IBXP4ROTD8PU41</LEI>\n" +
+            "    </FinInstnId>\n" +
+            "</Cdtr>\n" +
+            "<pacs:Cdtr>\n" +
+            "    <pacs:FinInstnId>\n" +
+            "        <BICFI>SOGEKHHXXXX</BICFI>\n" +
+            "        <LEI>O2RNE8IBXP4ROTD8PU41</LEI>\n" +
+            "    </pacs:FinInstnId>\n" +
+            "</pacs:Cdtr>";
+
+        // Combine both patterns using | (OR)
+        String regex = "<Cdtr>\\s*<FinInstnId>(.*?)</FinInstnId>\\s*</Cdtr>|<pacs:Cdtr>\\s*<pacs:FinInstnId>(.*?)</pacs:FinInstnId>\\s*</pacs:Cdtr>";
+        Pattern pattern = Pattern.compile(regex, Pattern.DOTALL);
+        Matcher matcher = pattern.matcher(xmlContent);
+
+        // Find and print the content for both patterns
+        while (matcher.find()) {
+            // Use group(1) for the first pattern and group(2) for the second pattern
+            String content = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+            System.out.println("Extracted Content:");
+            System.out.println(content.trim());
+        }
+    }
+}
