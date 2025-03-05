@@ -38,16 +38,23 @@ psql -d your_database
 ---
 
 ## **Step 2: Export Data to CSV**
-Execute the following `\copy` command inside `psql`:
+
+### **2.1 Using a Generic `\copy` Command**
+The `\copy` command follows this general structure:
+```sh
+\copy (SELECT column1, column2 FROM your_table) TO '/path/to/output.csv' WITH CSV HEADER;
+```
+- Replace `column1, column2` with the actual column names you want to export.
+- Replace `your_table` with the correct table name.
+- Replace `/path/to/output.csv` with the desired file path.
+
+### **2.2 Using `\copy` with a Real Query**
+Now, apply it with your actual query:
 ```sh
 \copy (SELECT column1, column2 FROM your_table WHERE some_condition LIMIT 15) TO '/home/your_user/output.csv' WITH CSV HEADER;
 ```
-
-### **Explanation:**
-- `\copy` exports data from PostgreSQL to a local file.
-- `SELECT column1, column2 FROM your_table WHERE some_condition LIMIT 15` fetches the required records.
-- `TO '/home/your_user/output.csv'` specifies the output file location.
-- `WITH CSV HEADER` ensures that column headers are included in the CSV.
+- Modify the `WHERE` clause and `LIMIT` as per your needs.
+- Ensure the target directory `/home/your_user/` has write permissions.
 
 ---
 
