@@ -48,13 +48,30 @@ The `\copy` command follows this general structure:
 - Replace `your_table` with the correct table name.
 - Replace `/path/to/output.csv` with the desired file path.
 
-### **2.2 Using `\copy` with a Real Query**
+### **2.2 Using `\copy` with a Custom Query**
 Now, apply it with your actual query:
 ```sh
 \copy (SELECT column1, column2 FROM your_table WHERE some_condition LIMIT 15) TO '/home/your_user/output.csv' WITH CSV HEADER;
 ```
-- Modify the `WHERE` clause and `LIMIT` as per your needs.
-- Ensure the target directory `/home/your_user/` has write permissions.
+
+#### **Important Points:**
+1. **The SQL query must be enclosed in parentheses `()`**  
+   - Example: `(SELECT column1, column2 FROM your_table WHERE condition)`  
+   - If you don't use parentheses, `\copy` will fail.
+
+2. **The SQL query should not have a semicolon `;` inside the brackets**  
+   - ❌ Incorrect: `\copy (SELECT * FROM your_table WHERE id > 10;) TO 'output.csv' WITH CSV HEADER;`  
+   - ✅ Correct: `\copy (SELECT * FROM your_table WHERE id > 10) TO 'output.csv' WITH CSV HEADER;`  
+
+3. **Ensure the target directory has the correct permissions**  
+   - The PostgreSQL user must have write access to `/home/your_user/`.
+   - If permission issues arise, consider using:
+     ```sh
+     chmod 777 /home/your_user/
+     ```
+
+4. **Use `WITH CSV HEADER` to include column names**  
+   - If omitted, only raw data will be exported without column headers.
 
 ---
 
@@ -94,6 +111,13 @@ head -5 /home/your_user/output.csv
 ### **2. `\copy` Command Fails with Syntax Error**
 - Ensure there is **no semicolon (`;`) inside the `\copy` parentheses**.
 - Double-check your SQL syntax by running the query separately.
+
+### **3. `\copy` Permission Denied Error**
+- If `\copy` throws a permission error, try using the `COPY` command instead (requires superuser privileges):
+  ```sh
+  COPY (SELECT column1, column2 FROM your_table) TO '/path/to/output.csv' WITH CSV HEADER;
+  ```
+  However, `COPY` writes to the server file system, while `\copy` writes to the local machine where `psql` is running.
 
 ---
 
