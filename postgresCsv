@@ -1,0 +1,79 @@
+# **Exporting CSV from PostgreSQL Using CLI**
+
+This guide explains how to export data from a PostgreSQL database into a CSV file using the command-line interface (CLI).
+
+---
+
+## **Prerequisites**
+- PostgreSQL installed on your system.
+- Access to the PostgreSQL database.
+- User with sufficient privileges to execute `\copy`.
+- Basic knowledge of Linux CLI (if using a Linux server).
+
+---
+
+## **Step 1: Connect to PostgreSQL**
+Open a terminal and log in to PostgreSQL using `psql`:
+```sh
+psql -U your_user -d your_database
+```
+- Replace `your_user` with your PostgreSQL username.
+- Replace `your_database` with the actual database name.
+
+---
+
+## **Step 2: Export Data to CSV**
+Execute the following `\copy` command inside `psql`:
+```sh
+\copy (SELECT column1, column2 FROM your_table WHERE some_condition LIMIT 15) TO '/home/your_user/output.csv' WITH CSV HEADER;
+```
+
+### **Explanation:**
+- `\copy` exports data from PostgreSQL to a local file.
+- `SELECT column1, column2 FROM your_table WHERE some_condition LIMIT 15` fetches the required records.
+- `TO '/home/your_user/output.csv'` specifies the output file location.
+- `WITH CSV HEADER` ensures that column headers are included in the CSV.
+
+---
+
+## **Step 3: Verify the Exported File**
+Exit `psql` using:
+```sh
+\q
+```
+Then, check if the file exists:
+```sh
+ls -l /home/your_user/output.csv
+```
+To view the first few lines of the file:
+```sh
+head -5 /home/your_user/output.csv
+```
+
+---
+
+## **Step 4: Transfer the CSV File Using WinSCP (For Windows Users)**
+1. Open **WinSCP** and connect to your server.
+2. Use **SFTP** or **SCP** as the file protocol.
+3. Navigate to `/home/your_user/` in the right panel.
+4. Download `output.csv` to your local machine.
+
+---
+
+## **Troubleshooting**
+### **1. Permission Denied Error**
+- Ensure you have write permissions to the `/home/your_user/` directory.
+- Use:
+  ```sh
+  chmod 644 /home/your_user/output.csv
+  ```
+  to allow read access.
+
+### **2. `\copy` Command Fails with Syntax Error**
+- Ensure there is **no semicolon (`;`) inside the `\copy` parentheses**.
+- Double-check your SQL syntax by running the query separately.
+
+---
+
+## **Conclusion**
+You have successfully exported data from PostgreSQL to a CSV file using `\copy` and transferred it to your local machine. 🎉
