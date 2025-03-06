@@ -1,0 +1,3 @@
+Description:
+
+As part of the updated security guidelines, direct database access using username/password authentication is being removed. This story covers documenting a standardized process for exporting read-only data from PostgreSQL using the CLI. The document will provide clear steps for exporting data securely and transferring it without requiring database credentials.
