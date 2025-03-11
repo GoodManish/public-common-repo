@@ -1,0 +1,22 @@
+Key Questions for Discussion on Transact Instance Separation
+How will the separation of Transact instances (on-prem for India and Azure for SGP/HKG) impact the existing payment processing flow, particularly with downstream applications like ActiveMQ, Swingtee, and IBM MQ?
+
+Currently, Transact sends payments to ActiveMQ (hosted on a Hong Kong server), and Swingtee consumes them before forwarding them to IBM MQ. With separate Transact instances for India and SGP/HKG, how should this architecture evolve?
+
+Should the India Transact instance continue using the same ActiveMQ setup in Hong Kong, or should a separate ActiveMQ instance be deployed in India?
+If a separate ActiveMQ is required for India, how will Swingtee manage messages from both sources?
+Should we consider deploying a separate Swingtee instance for India, or modify the existing one to handle multiple payment sources?
+How should IBM MQ be managed in this new setup?
+
+Should we continue using a single IBM MQ host for all regions, or deploy separate MQ instances for India and SGP/HKG?
+If a single IBM MQ instance is retained, what are the network connectivity requirements to ensure secure and low-latency communication between Azure (SGP/HKG) and on-prem (India)?
+If separate IBM MQ instances are introduced, how will the integration with SWIFT and other dependent systems be managed?
+How can we ensure compliance with RBI regulations, particularly ensuring that Indian transaction data remains within India while maintaining seamless operations for SGP and HKG transactions?
+
+Given that Swingtee is a Java Camel application deployed in a Kubernetes cluster in Hong Kong, what are the potential latency and performance concerns when routing payments between on-prem (India), cloud (Azure), and the existing Hong Kong-based Swingtee and ActiveMQ setup?
+
+Should we explore ExpressRoute, VPN, or other dedicated connectivity solutions to optimize performance?
+What changes, if any, are required in our disaster recovery and backup strategy to support the new architecture while ensuring data segregation and high availability?
+
+From an enterprise architecture perspective, what would be the recommended approach to ensure scalability, maintainability, and security in this new multi-instance setup?
+
