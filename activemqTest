@@ -1,0 +1,67 @@
+import javax.jms.*;
+import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Properties;
+
+public class FileToArtemisSender {
+
+    public static void main(String[] args) {
+        // ======= Configuration =======
+        String env = "UAT"; // Change to "PROD" for production
+
+        String filePath = "message.xml"; // XML message file
+        String queueName = "exampleQueue";
+
+        // Credentials
+        String username = "your-username";
+        String password = "your-password";
+
+        // Broker URLs
+        String uatUrl = "tcp://srxbomtema81.in.world.socgen:61616";
+        String prodUrl = "ssl://srxbomtema71.in.world.socgen:61616";
+        String brokerURL = env.equalsIgnoreCase("PROD") ? prodUrl : uatUrl;
+
+        // =================================
+
+        try {
+            // Step 1: Read the XML message from file
+            String messageContent = new String(Files.readAllBytes(Paths.get(filePath)));
+
+            // Step 2: Create a connection factory with credentials
+            try (ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerURL, username, password);
+                 Connection connection = factory.createConnection();
+                 Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE)) {
+
+                // Step 3: Create destination and send message
+                Queue queue = session.createQueue(queueName);
+                MessageProducer producer = session.createProducer(queue);
+                TextMessage message = session.createTextMessage(messageContent);
+
+                producer.send(message);
+                System.out.println("✅ Message sent to queue: " + queueName + " on " + env + " environment.");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.err.println("❌ Failed to send message to Artemis queue.");
+        }
+    }
+}
+-----------
+input xml :-
+<order>
+    <id>12345</id>
+    <item>Book</item>
+    <quantity>2</quantity>
+</order>
+
+-----------
+You'll need to set SSL-related system properties at runtime:
+
+java -Djavax.net.ssl.trustStore=truststore.jks \
+     -Djavax.net.ssl.trustStorePassword=changeit \
+     -Djavax.net.ssl.keyStore=keystore.jks \
+     -Djavax.net.ssl.keyStorePassword=changeit \
+     -cp your-jar-with-dependencies.jar FileToArtemisSender
