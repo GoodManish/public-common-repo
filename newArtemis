@@ -1,0 +1,60 @@
+package com.example;
+
+import javax.jms.*;
+import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
+
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Properties;
+
+public class FileToArtemisSender {
+
+    public static void main(String[] args) {
+        try {
+            // Load config
+            Properties props = new Properties();
+            try (InputStream input = FileToArtemisSender.class.getClassLoader().getResourceAsStream("config.properties")) {
+                props.load(input);
+            }
+
+            String brokerURL = props.getProperty("broker.url");
+            String queueName = props.getProperty("queue.name");
+            String fileName = props.getProperty("message.file");
+            String username = props.getProperty("username");
+            String password = props.getProperty("password");
+
+            // Read XML from file
+            String messageContent = Files.readString(Paths.get("src/main/resources/" + fileName));
+
+            // Connect to broker
+            ConnectionFactory factory = new ActiveMQConnectionFactory(brokerURL);
+            try (Connection connection = username.isBlank() ?
+                    factory.createConnection() :
+                    factory.createConnection(username, password)) {
+
+                Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+                Queue queue = session.createQueue(queueName);
+                MessageProducer producer = session.createProducer(queue);
+
+                TextMessage message = session.createTextMessage(messageContent);
+                producer.send(message);
+
+                System.out.println("✅ Message sent to queue: " + queueName);
+                session.close();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.err.println("❌ Failed to send message.");
+        }
+    }
+}
+
+
+
+broker.url=tcp://localhost:61616
+queue.name=exampleQueue
+message.file=message.xml
+username=
+password=
