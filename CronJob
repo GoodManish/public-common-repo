@@ -45,3 +45,43 @@ private String companyPrefix;
  company:
   prefix: ${COMPANY_PREFIX:ALL}
 -------------------------------------------
+---- Service class ----
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+@Service
+public class CompanyJobService {
+
+    @Value("${COMPANY_PREFIX:ALL}")
+    private String companyPrefix;
+
+    @Autowired
+    private CompanyApiClient companyApiClient; // your API client
+
+    public void run() {
+        System.out.println("Running job for company prefix: " + companyPrefix);
+
+        List<String> allCompanyIds = companyApiClient.fetchCompanyIds();
+        List<String> filteredCompanyIds = filterByPrefix(allCompanyIds, companyPrefix);
+
+        for (String companyId : filteredCompanyIds) {
+            processCompany(companyId); // your existing logic
+        }
+    }
+
+    private List<String> filterByPrefix(List<String> companyIds, String prefix) {
+        if ("ALL".equalsIgnoreCase(prefix)) {
+            return companyIds;
+        }
+
+        return companyIds.stream()
+                .filter(id -> id.startsWith(prefix))
+                .collect(Collectors.toList());
+    }
+
+    private void processCompany(String companyId) {
+        // Your existing full processing pipeline
+    }
+}
+
