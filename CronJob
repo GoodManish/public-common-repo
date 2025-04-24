@@ -1,0 +1,47 @@
+--npa-cronjob.yaml---
+
+{{- range $key, $job := .Values.npaCronJob }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: npa-cronjob-{{ $job.company | lower }}
+spec:
+  schedule: "{{ $job.schedule }}"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: npa-job
+              image: your-docker-repo/your-image:latest
+              env:
+                - name: COMPANY_PREFIX
+                  value: "{{ $job.company }}"
+          restartPolicy: OnFailure
+---
+{{- end }}
+
+-------------------------------------------------------
+-- values-uat1.yaml ----
+
+npaCronJob:
+  ind:
+    company: "IND"
+    schedule: "0 10 * * *"
+  sgp:
+    company: "SGP"
+    schedule: "0 13 * * *"
+  hkg:
+    company: "HKG"
+    schedule: "0 16 * * *"
+-------------------------------------------
+-- DataService.java ---
+@Value("${company.prefix:ALL}")
+private String companyPrefix;
+
+-------------------------------------------
+ -- application.yaml ---
+
+ company:
+  prefix: ${COMPANY_PREFIX:ALL}
+-------------------------------------------
