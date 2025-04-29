@@ -85,3 +85,19 @@ public class CompanyJobService {
     }
 }
 
+
+How helm works : 
+
+(values-uat1.yaml or values-prod.yaml)
+        ↓
+  [Helm Template: npa-cronjob.yaml]
+        ↓
+(Helm injects COMPANY_PREFIX & SCHEDULE into CronJob YAML)
+        ↓
+  [Kubernetes CronJob Resource Created]
+        ↓
+(Pod starts → Environment Variables available inside container)
+        ↓
+ [Spring Boot reads COMPANY_PREFIX using @Value annotation]
+        ↓
+ [CompanyJobService picks up the right companies to process]
