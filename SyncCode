@@ -1,0 +1,62 @@
+import java.util.concurrent.*;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import lombok.extern.slf4j.Slf4j;  // If you are using Lombok for logging
+
+@Service
+@Slf4j
+public class CompanyJobService {
+
+    @Autowired
+    private GamoraApiClient gamoraApi;
+
+    public void processCustomerMap(Map<String, CustomerDetail> customerMap) {
+        // 1. Thread pool for async execution
+        int threadPoolSize = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(threadPoolSize);
+
+        // 2. Thread-safe set to track failed customer IDs
+        Set<String> failedIds = ConcurrentHashMap.newKeySet();
+
+        // 3. Launch parallel tasks
+        List<CompletableFuture<Void>> futures = customerMap.keySet().stream()
+            .map(rctCode -> CompletableFuture.runAsync(() -> {
+                try {
+                    NpaRatingResponse response = gamoraApi.fetchRating(rctCode);
+                    if (response != null && response.getNpaRating() != null) {
+                        CustomerDetail existingDetail = customerMap.get(rctCode);
+                        if (existingDetail != null) {
+                            CustomerDetail updatedDetail = CustomerDetail.builder()
+                                .customerId(existingDetail.getCustomerId())
+                                .name(existingDetail.getName())
+                                // Copy other fields if needed...
+                                .npaRating(response.getNpaRating())
+                                .build();
+                            
+                            customerMap.put(rctCode, updatedDetail);
+                        } else {
+                            log.warn("No CustomerDetail found for rctCode: {}", rctCode);
+                            failedIds.add(rctCode);
+                        }
+                    } else {
+                        log.warn("Empty response from Gamora for rctCode: {}", rctCode);
+                        failedIds.add(rctCode);
+                    }
+                } catch (Exception e) {
+                    log.error("Exception while fetching rating for rctCode: {}", rctCode, e);
+                    failedIds.add(rctCode);
+                }
+            }, executor))
+            .collect(Collectors.toList());
+
+        // 4. Wait for all tasks to complete
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        // 5. Remove failed customers from map
+        failedIds.forEach(customerMap::remove);
+
+        // 6. Shutdown executor
+        executor.shutdown();
+    }
+}
