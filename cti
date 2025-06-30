@@ -282,3 +282,125 @@ public class GlobalExceptionHandler {
     }
 }
 
+--------
+
+<!-- Spring Boot Starter for JMS -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-activemq</artifactId>
+</dependency>
+
+<!-- Artemis JMS Client -->
+<dependency>
+    <groupId>org.apache.activemq</groupId>
+    <artifactId>artemis-jms-client</artifactId>
+    <version>2.33.0</version>
+</dependency>
+------------
+sftp:
+  host: ftr-box.example.com
+  port: "22"
+  username: your_user
+  privateKeyPath: /app/keys/id_rsa
+  remoteFile: /remote/path/file.txt
+  localFile: /app/downloads/file.txt
+
+spring:
+  activemq:
+    broker-url: tcp://activemq-host:61616
+    user: admin
+    password: admin
+    pool:
+      enabled: false
+
+queue:
+  destination: file.queue.inbox
+--------------
+
+package com.example.sftpdownloader;
+
+import jakarta.jms.Queue;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jms.core.JmsTemplate;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+@Service
+public class MessagePublisherService {
+    private static final Logger logger = LoggerFactory.getLogger(MessagePublisherService.class);
+
+    private final JmsTemplate jmsTemplate;
+    private final Queue queue;
+
+    public MessagePublisherService(JmsTemplate jmsTemplate, Queue queue) {
+        this.jmsTemplate = jmsTemplate;
+        this.queue = queue;
+    }
+
+    public void sendFile(String filePath) {
+        try {
+            byte[] fileBytes = Files.readAllBytes(Path.of(filePath));
+            jmsTemplate.convertAndSend(queue, fileBytes);
+            logger.info("✅ File sent to queue: {}", queue.getQueueName());
+        } catch (IOException e) {
+            logger.error("❌ Failed to read file at {}: {}", filePath, e.getMessage());
+        } catch (Exception e) {
+            logger.error("❌ Failed to send file to queue: {}", e.getMessage());
+        }
+    }
+}
+
+
+-----------
+package com.example.sftpdownloader;
+
+import jakarta.jms.Queue;
+import org.apache.activemq.command.ActiveMQQueue;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class AppConfig {
+    @Bean
+    public Queue queue(@Value("${queue.destination}") String queueName) {
+        return new ActiveMQQueue(queueName);
+    }
+}
+----------
+public class SftpService {
+
+    private final SftpProperties properties;
+    private final MessagePublisherService publisherService;
+
+    public SftpService(SftpProperties properties, MessagePublisherService publisherService) {
+        this.properties = properties;
+        this.publisherService = publisherService;
+    }
+
+    public void downloadFile() {
+        // ... existing SFTP download logic ...
+        try (InputStream inputStream = sftpChannel.get(properties.getRemoteFile());
+             FileOutputStream outputStream = new FileOutputStream(properties.getLocalFile())) {
+
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+
+            logger.info("✅ File downloaded successfully.");
+
+            // 🆕 Send to queue after successful download
+            publisherService.sendFile(properties.getLocalFile());
+
+        } catch (Exception e) {
+            throw new SftpFileTransferException("File download or messaging failed", e);
+        }
+    }
+}
+-----------
