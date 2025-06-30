@@ -153,3 +153,132 @@ image:
 -----
 kubectl create secret generic sftp-private-key \
   --from-file=id_rsa=/path/to/id_rsa
+
+
+-------
+package com.example.sftpdownloader.exception;
+
+public class SftpConnectionException extends RuntimeException {
+    public SftpConnectionException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+package com.example.sftpdownloader.exception;
+
+public class SftpAuthenticationException extends RuntimeException {
+    public SftpAuthenticationException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+package com.example.sftpdownloader.exception;
+
+public class SftpFileTransferException extends RuntimeException {
+    public SftpFileTransferException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+
+package com.example.sftpdownloader;
+
+import com.example.sftpdownloader.exception.*;
+import com.jcraft.jsch.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import java.io.FileOutputStream;
+import java.io.InputStream;
+
+@Service
+public class SftpService {
+    private static final Logger logger = LoggerFactory.getLogger(SftpService.class);
+    private final SftpProperties properties;
+
+    public SftpService(SftpProperties properties) {
+        this.properties = properties;
+    }
+
+    public void downloadFile() {
+        Session session = null;
+        ChannelSftp sftpChannel = null;
+
+        try {
+            JSch jsch = new JSch();
+            jsch.addIdentity(properties.getPrivateKeyPath());
+
+            session = jsch.getSession(properties.getUsername(), properties.getHost(), Integer.parseInt(properties.getPort()));
+            session.setConfig("StrictHostKeyChecking", "no");
+
+            try {
+                session.connect(10000); // 10 seconds timeout
+            } catch (JSchException e) {
+                throw new SftpAuthenticationException("Failed to authenticate with SFTP server.", e);
+            }
+
+            try {
+                sftpChannel = (ChannelSftp) session.openChannel("sftp");
+                sftpChannel.connect(10000);
+            } catch (JSchException e) {
+                throw new SftpConnectionException("Failed to establish SFTP channel.", e);
+            }
+
+            try (InputStream inputStream = sftpChannel.get(properties.getRemoteFile());
+                 FileOutputStream outputStream = new FileOutputStream(properties.getLocalFile())) {
+
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                logger.info("✅ File downloaded successfully to {}", properties.getLocalFile());
+
+            } catch (Exception e) {
+                throw new SftpFileTransferException("Failed to transfer or save file from SFTP.", e);
+            }
+
+        } catch (RuntimeException e) {
+            logger.error("SFTP error: {}", e.getMessage(), e);
+            throw e;
+        } catch (Exception e) {
+            throw new SftpConnectionException("Unexpected error during SFTP operation.", e);
+        } finally {
+            if (sftpChannel != null) sftpChannel.disconnect();
+            if (session != null) session.disconnect();
+        }
+    }
+}
+
+
+package com.example.sftpdownloader.exception;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(SftpAuthenticationException.class)
+    public ResponseEntity<String> handleAuth(SftpAuthenticationException ex) {
+        logger.error("Auth failed: {}", ex.getMessage());
+        return ResponseEntity.status(401).body("Authentication Failed: " + ex.getMessage());
+    }
+
+    @ExceptionHandler(SftpConnectionException.class)
+    public ResponseEntity<String> handleConnection(SftpConnectionException ex) {
+        logger.error("Connection issue: {}", ex.getMessage());
+        return ResponseEntity.status(503).body("Connection Issue: " + ex.getMessage());
+    }
+
+    @ExceptionHandler(SftpFileTransferException.class)
+    public ResponseEntity<String> handleFileTransfer(SftpFileTransferException ex) {
+        logger.error("File transfer issue: {}", ex.getMessage());
+        return ResponseEntity.status(500).body("File Transfer Failed: " + ex.getMessage());
+    }
+}
+
