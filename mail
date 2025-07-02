@@ -1,0 +1,16 @@
+Subject: CTI File Push – Updated Design Architecture
+
+Dear [Recipient's Name],
+
+As per the finalized design architecture, the approach for handling CTI files has been updated.
+
+Going forward, CTI files will need to be pushed from the FTR host to an API endpoint that is exposed by a Java component on the Transact side. This shift ensures better scalability and streamlined processing.
+
+Please find the final design architecture document attached for your reference.
+
+Do let me know if you have any questions or need further clarification.
+
+Best regards,
+[Your Full Name]
+[Your Designation]
+[Your Contact Info, if needed]
