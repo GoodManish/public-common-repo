@@ -14,3 +14,13 @@ Best regards,
 [Your Full Name]
 [Your Designation]
 [Your Contact Info, if needed]
+
+
+
+As per the updated design architecture, CTI files are to be pushed from the FTR host to an API endpoint exposed by the Java component on the Transact side.
+
+Accordingly, the development on the FTR side needs to be planned and implemented to support this approach. We will be sharing all necessary API endpoint details from the Transact side shortly to facilitate this integration.
+
+Please find the final design architecture document attached for your reference.
+
+Let us know if you need any further information.
