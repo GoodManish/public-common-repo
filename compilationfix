@@ -1,0 +1,11 @@
+BigDecimal limit = BigDecimal.ZERO;
+try {
+    Transaction txn = currContract.getTransactions().getTransaction().get(0); // always first
+    if (txn != null && txn.getAccountData() != null
+        && txn.getAccountData().getOverdraftLimitData() != null
+        && txn.getAccountData().getOverdraftLimitData().getAmount() != null) {
+        limit = new BigDecimal(txn.getAccountData().getOverdraftLimitData().getAmount());
+    }
+} catch (Exception ex) {
+    limit = BigDecimal.ZERO;
+}
