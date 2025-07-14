@@ -1,0 +1,204 @@
+import org.apache.commons.lang3.tuple.Triple;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+public static Topic updateNdodForDay(
+    Topic ndodXmlCurrDay,
+    Topic ndodXmlPrevDay,
+    Triple<String, String, String> ctiDetails
+) {
+    if (ndodXmlCurrDay == null || ctiDetails == null) return ndodXmlCurrDay;
+
+    String leadAccount = ctiDetails.getLeft();
+    String sign = ctiDetails.getMiddle();
+    String absBalanceStr = ctiDetails.getRight();
+
+    // Parse current balance with sign
+    BigDecimal currBal = new BigDecimal(absBalanceStr);
+    if ("-".equals(sign)) currBal = currBal.negate();
+
+    // Find contract and transaction for lead account (assume only one match)
+    Contract currContract = ndodXmlCurrDay.getContracts().getContract().stream()
+        .filter(c -> c.getTransactions().getTransaction().get(0).getIdentifier().equals(leadAccount))
+        .findFirst().orElse(null);
+    if (currContract == null) return ndodXmlCurrDay;
+
+    Transaction currTxn = currContract.getTransactions().getTransaction().get(0);
+    AccountData currAcctData = currTxn.getAccountData();
+    EconomicAmount currEcoAmt = currAcctData.getEconomicPositions().getEconomicAmount().get(0);
+
+    // Overdraft limit
+    BigDecimal limit = new BigDecimal(currAcctData.getOverdraftLimitData().getAmount());
+
+    // Get previous balance, previous OD (if any)
+    BigDecimal prevBal = null;
+    OverdueEvents prevOdEvents = null;
+    if (ndodXmlPrevDay != null) {
+        Contract prevContract = ndodXmlPrevDay.getContracts().getContract().stream()
+            .filter(c -> c.getTransactions().getTransaction().get(0).getIdentifier().equals(leadAccount))
+            .findFirst().orElse(null);
+        if (prevContract != null) {
+            Transaction prevTxn = prevContract.getTransactions().getTransaction().get(0);
+            EconomicAmount prevEcoAmt = prevTxn.getAccountData().getEconomicPositions().getEconomicAmount().get(0);
+            prevBal = new BigDecimal(prevEcoAmt.getAmount());
+            prevOdEvents = prevEcoAmt.getOverdueEvents();
+        }
+    }
+
+    String today = LocalDate.now().toString();
+
+    // --- LOGIC STARTS HERE ---
+
+    // 1. First Day, Negative Balance, Within Limit (NO OD, NO RPD)
+    if (ndodXmlPrevDay == null && currBal.compareTo(BigDecimal.ZERO) < 0 && currBal.compareTo(limit.negate()) > 0) {
+        currEcoAmt.setAmount(currBal.abs().toPlainString());
+        currEcoAmt.setOverdueEvents(null);
+        currEcoAmt.setRepaymentEvents(null);
+        // Check for positive clean-up rule (should not fire here)
+        return ndodXmlCurrDay;
+    }
+
+    // 2. New OD (currBal < prevBal, both negative, both below limit)
+    if (prevBal != null && currBal.compareTo(prevBal) < 0
+        && currBal.compareTo(limit.negate()) < 0 && prevBal.compareTo(limit.negate()) < 0) {
+        currEcoAmt.setAmount(currBal.abs().toPlainString());
+        // OD = |currBal| - |prevBal| (as per your business logic)
+        OverdueEvents odEvents = new OverdueEvents();
+        OverdueEvent odEvent = new OverdueEvent();
+        odEvent.setIdentifier("OVD-OD");
+        odEvent.setType("006");
+        odEvent.setAmount(currBal.abs().subtract(prevBal.abs()).toPlainString());
+        odEvent.setCurrency("CNH");
+        odEvent.setDate(today);
+        odEvents.getOverdueEvent().add(odEvent);
+        currEcoAmt.setOverdueEvents(odEvents);
+        currEcoAmt.setRepaymentEvents(null);
+        return ndodXmlCurrDay;
+    }
+
+    // 3. Carry Forward OD (balances unchanged, both negative/below limit)
+    if (prevBal != null && currBal.compareTo(prevBal) == 0 && currBal.compareTo(limit.negate()) < 0) {
+        currEcoAmt.setAmount(currBal.abs().toPlainString());
+        currEcoAmt.setOverdueEvents(prevOdEvents); // Carry forward prev OD, same date
+        currEcoAmt.setRepaymentEvents(null);
+        return ndodXmlCurrDay;
+    }
+
+    // 4. Repayment (currBal > prevBal, both negative/below limit, not crossed limit)
+    if (prevBal != null && currBal.compareTo(prevBal) > 0
+        && currBal.compareTo(limit.negate()) < 0 && prevBal.compareTo(limit.negate()) < 0) {
+        currEcoAmt.setAmount(currBal.abs().toPlainString());
+        currEcoAmt.setOverdueEvents(prevOdEvents);
+        // RPD = |currBal - prevBal|
+        RepaymentEvents rpdEvents = new RepaymentEvents();
+        RepaymentEvent rpdEvent = new RepaymentEvent();
+        rpdEvent.setIdentifier("RPD-OD");
+        rpdEvent.setType("009");
+        rpdEvent.setAmount(currBal.subtract(prevBal).abs().toPlainString());
+        rpdEvent.setCurrency("CNH");
+        rpdEvent.setDate(today);
+        rpdEvents.getRepaymentEvent().add(rpdEvent);
+        currEcoAmt.setRepaymentEvents(rpdEvents);
+        return ndodXmlCurrDay;
+    }
+
+    // 5. Repayment, special: currBal > prevBal, currBal crosses limit (RPD = prevBal - limit)
+    if (prevBal != null && currBal.compareTo(prevBal) > 0
+        && currBal.compareTo(limit.negate()) >= 0 && prevBal.compareTo(limit.negate()) < 0) {
+        currEcoAmt.setAmount(currBal.abs().toPlainString());
+        currEcoAmt.setOverdueEvents(prevOdEvents);
+        // RPD = |prevBal - OD limit|
+        RepaymentEvents rpdEvents = new RepaymentEvents();
+        RepaymentEvent rpdEvent = new RepaymentEvent();
+        rpdEvent.setIdentifier("RPD-OD");
+        rpdEvent.setType("009");
+        rpdEvent.setAmount(prevBal.subtract(limit.negate()).abs().toPlainString());
+        rpdEvent.setCurrency("CNH");
+        rpdEvent.setDate(today);
+        rpdEvents.getRepaymentEvent().add(rpdEvent);
+        currEcoAmt.setRepaymentEvents(rpdEvents);
+        return ndodXmlCurrDay;
+    }
+
+    // 6. Both balances =, now above/crossed limit (clear OD/RPD)
+    if (prevBal != null && currBal.compareTo(prevBal) == 0 && currBal.compareTo(limit.negate()) >= 0) {
+        currEcoAmt.setAmount(currBal.abs().toPlainString());
+        currEcoAmt.setOverdueEvents(null);
+        currEcoAmt.setRepaymentEvents(null);
+        return ndodXmlCurrDay;
+    }
+
+    // 7. New OD, after previous above limit (currBal < prevBal, prev above limit, curr now below)
+    if (prevBal != null && currBal.compareTo(prevBal) < 0
+        && prevBal.compareTo(limit.negate()) >= 0 && currBal.compareTo(limit.negate()) < 0) {
+        currEcoAmt.setAmount(currBal.abs().toPlainString());
+        OverdueEvents odEvents = new OverdueEvents();
+        OverdueEvent odEvent = new OverdueEvent();
+        odEvent.setIdentifier("OVD-OD");
+        odEvent.setType("006");
+        odEvent.setAmount(currBal.abs().subtract(limit).toPlainString());
+        odEvent.setCurrency("CNH");
+        odEvent.setDate(today);
+        odEvents.getOverdueEvent().add(odEvent);
+        currEcoAmt.setOverdueEvents(odEvents);
+        currEcoAmt.setRepaymentEvents(null);
+        return ndodXmlCurrDay;
+    }
+
+    // 8. Repayment clears OD (currBal > 0, prevBal negative/below limit)
+    if (prevBal != null && currBal.compareTo(BigDecimal.ZERO) > 0
+        && prevBal.compareTo(limit.negate()) < 0) {
+        currEcoAmt.setAmount("0");
+        currEcoAmt.setOverdueEvents(prevOdEvents);
+        RepaymentEvents rpdEvents = new RepaymentEvents();
+        RepaymentEvent rpdEvent = new RepaymentEvent();
+        rpdEvent.setIdentifier("RPD-OD");
+        rpdEvent.setType("009");
+        rpdEvent.setAmount(prevBal.abs().subtract(limit).toPlainString());
+        rpdEvent.setCurrency("CNH");
+        rpdEvent.setDate(today);
+        rpdEvents.getRepaymentEvent().add(rpdEvent);
+        currEcoAmt.setRepaymentEvents(rpdEvents);
+        return ndodXmlCurrDay;
+    }
+
+    // 9. Both positive and unchanged (clear all events and amount)
+    if (prevBal != null && currBal.compareTo(BigDecimal.ZERO) > 0
+        && prevBal.compareTo(BigDecimal.ZERO) > 0
+        && currBal.compareTo(prevBal) == 0) {
+        currEcoAmt.setAmount(null);
+        currEcoAmt.setOverdueEvents(null);
+        currEcoAmt.setRepaymentEvents(null);
+        // Will fall through to deletion logic if needed
+        // (or you could remove contract here directly if you like)
+    }
+
+    // 10. New OD after positive prevBal (currBal < 0, prevBal > 0)
+    if (prevBal != null && currBal.compareTo(BigDecimal.ZERO) < 0
+        && prevBal.compareTo(BigDecimal.ZERO) > 0) {
+        currEcoAmt.setAmount(currBal.abs().toPlainString());
+        OverdueEvents odEvents = new OverdueEvents();
+        OverdueEvent odEvent = new OverdueEvent();
+        odEvent.setIdentifier("OVD-OD");
+        odEvent.setType("006");
+        odEvent.setAmount(currBal.abs().subtract(limit).toPlainString());
+        odEvent.setCurrency("CNH");
+        odEvent.setDate(today);
+        odEvents.getOverdueEvent().add(odEvent);
+        currEcoAmt.setOverdueEvents(odEvents);
+        currEcoAmt.setRepaymentEvents(null);
+        return ndodXmlCurrDay;
+    }
+
+    // --- POSITIVE BALANCE & NO OD = REMOVE CONTRACT ---
+    if (currBal.compareTo(BigDecimal.ZERO) > 0
+        && (currEcoAmt.getOverdueEvents() == null
+            || currEcoAmt.getOverdueEvents().getOverdueEvent().isEmpty())) {
+        // Remove the contract for this account
+        ndodXmlCurrDay.getContracts().getContract().remove(currContract);
+        return ndodXmlCurrDay;
+    }
+
+    // Default: just return (should not reach here in golden cases)
+    return ndodXmlCurrDay;
+}
