@@ -1,0 +1,29 @@
+// Current EconomicAmount
+EconomicAmount currEcoAmt = null;
+try {
+    Transaction currTxn = currContract.getTransactions().getTransaction().get(0);
+    if (currTxn != null && currTxn.getAccountData() != null &&
+        currTxn.getAccountData().getEconomicPositions() != null &&
+        currTxn.getAccountData().getEconomicPositions().getEconomicAmount() != null &&
+        !currTxn.getAccountData().getEconomicPositions().getEconomicAmount().isEmpty()) {
+        currEcoAmt = currTxn.getAccountData().getEconomicPositions().getEconomicAmount().get(0);
+    }
+} catch (Exception e) {
+    currEcoAmt = null;
+}
+
+// Previous EconomicAmount (if any)
+EconomicAmount prevEcoAmt = null;
+if (prevContract != null) {
+    try {
+        Transaction prevTxn = prevContract.getTransactions().getTransaction().get(0);
+        if (prevTxn != null && prevTxn.getAccountData() != null &&
+            prevTxn.getAccountData().getEconomicPositions() != null &&
+            prevTxn.getAccountData().getEconomicPositions().getEconomicAmount() != null &&
+            !prevTxn.getAccountData().getEconomicPositions().getEconomicAmount().isEmpty()) {
+            prevEcoAmt = prevTxn.getAccountData().getEconomicPositions().getEconomicAmount().get(0);
+        }
+    } catch (Exception e) {
+        prevEcoAmt = null;
+    }
+}
