@@ -1,0 +1,200 @@
+import org.apache.commons.lang3.tuple.Triple;
+import java.math.BigDecimal;
+import java.util.Objects;
+
+public Topic generateFinalNdodXml(
+        Triple<String, String, String> processedCtiDetails, // leadAccountNumber, sign ("POS"/"NEG" or "+" / "-"), currentBalance
+        Topic ndodXmlCurrDay,
+        Topic ndodXmlPrevDay,
+        int overdraftLimit,          // Pass the limit as an argument, do not hardcode
+        String currentDateStr        // Pass system date (YYYY-MM-DD)
+) {
+    if (ndodXmlCurrDay == null || ndodXmlCurrDay.getContracts() == null
+            || ndodXmlCurrDay.getContracts().getContractList() == null
+            || ndodXmlCurrDay.getContracts().getContractList().isEmpty()) {
+        return ndodXmlCurrDay;
+    }
+
+    // 1. Extract CTI info
+    String leadAccountNumber = processedCtiDetails.getLeft();
+    String sign = processedCtiDetails.getMiddle(); // "POS" or "NEG", or "+" or "-"
+    String balanceStr = processedCtiDetails.getRight();
+
+    // 2. Parse today's balance (apply sign)
+    BigDecimal currBalance;
+    try {
+        currBalance = new BigDecimal(balanceStr.trim());
+        if (isNegative(sign)) {
+            currBalance = currBalance.abs().negate();
+        } else if (isPositive(sign)) {
+            currBalance = currBalance.abs();
+        }
+    } catch (Exception ex) {
+        // Invalid number, treat as zero
+        currBalance = BigDecimal.ZERO;
+    }
+
+    // 3. Find the contract for this account in current NDOD
+    Contract currContract = ndodXmlCurrDay.getContracts().getContractList()
+            .stream()
+            .filter(c -> Objects.equals(leadAccountNumber, extractAccountNumber(c)))
+            .findFirst().orElse(null);
+    if (currContract == null) return ndodXmlCurrDay; // Not found
+
+    // 4. Find previous day's contract, if present
+    Contract prevContract = (ndodXmlPrevDay != null && ndodXmlPrevDay.getContracts() != null)
+            ? ndodXmlPrevDay.getContracts().getContractList().stream()
+                .filter(c -> Objects.equals(leadAccountNumber, extractAccountNumber(c)))
+                .findFirst().orElse(null)
+            : null;
+
+    // 5. Get current and previous balances from EconomicAmount
+    EconomicAmount currEcoAmt = currContract.getEconomicPositions().getEconomicAmountList().get(0);
+    EconomicAmount prevEcoAmt = (prevContract != null && prevContract.getEconomicPositions() != null
+            && prevContract.getEconomicPositions().getEconomicAmountList() != null
+            && !prevContract.getEconomicPositions().getEconomicAmountList().isEmpty())
+            ? prevContract.getEconomicPositions().getEconomicAmountList().get(0)
+            : null;
+
+    BigDecimal prevBalance = prevEcoAmt != null ? new BigDecimal(prevEcoAmt.getAmount()) : BigDecimal.ZERO;
+
+    // 6. Use overdraftLimit from argument (never hardcode)
+    BigDecimal limit = BigDecimal.valueOf(overdraftLimit);
+
+    // --- Golden logic starts ---
+
+    currEcoAmt.setOverdueEvents(null); // Remove previous OD/RPD events
+
+    boolean currOverdue = currBalance.compareTo(limit.negate()) < 0;
+    boolean prevOverdue = prevBalance.compareTo(limit.negate()) < 0;
+    BigDecimal currOD = currOverdue ? currBalance.abs().subtract(limit) : BigDecimal.ZERO;
+    BigDecimal prevODVal = prevOverdue ? prevBalance.abs().subtract(limit) : BigDecimal.ZERO;
+
+    String prevODAmt = null, prevODDate = null;
+    if (prevEcoAmt != null && prevEcoAmt.getOverdueEvents() != null
+            && prevEcoAmt.getOverdueEvents().getOverdueEvent() != null) {
+        OverdueEvent prevOD = prevEcoAmt.getOverdueEvents().getOverdueEvent();
+        prevODAmt = prevOD.getAmount();
+        prevODDate = prevOD.getDate();
+    }
+
+    // 1. First day or no previous contract
+    if (prevEcoAmt == null) {
+        if (currOverdue) {
+            OverdueEvents odEvents = new OverdueEvents();
+            OverdueEvent od = new OverdueEvent();
+            od.setAmount(currOD.toPlainString());
+            od.setDate(currentDateStr);
+            odEvents.setOverdueEvent(od);
+            currEcoAmt.setOverdueEvents(odEvents);
+        }
+        currEcoAmt.setAmount(currBalance.abs().toPlainString());
+        return ndodXmlCurrDay;
+    }
+
+    // 2. Carry forward OD (no change, still overdue)
+    if (currBalance.compareTo(prevBalance) == 0 && currOverdue) {
+        if (prevODAmt != null && prevODDate != null) {
+            OverdueEvents odEvents = new OverdueEvents();
+            OverdueEvent od = new OverdueEvent();
+            od.setAmount(prevODAmt);
+            od.setDate(prevODDate);
+            odEvents.setOverdueEvent(od);
+            currEcoAmt.setOverdueEvents(odEvents);
+        }
+        currEcoAmt.setAmount(currBalance.abs().toPlainString());
+        return ndodXmlCurrDay;
+    }
+
+    // 3. New/increased OD (deeper in OD, both days overdue)
+    if (currBalance.compareTo(prevBalance) < 0 && currOverdue && prevOverdue) {
+        BigDecimal newOD = prevBalance.subtract(currBalance).abs();
+        OverdueEvents odEvents = new OverdueEvents();
+        OverdueEvent od = new OverdueEvent();
+        od.setAmount(newOD.toPlainString());
+        od.setDate(currentDateStr);
+        odEvents.setOverdueEvent(od);
+        currEcoAmt.setOverdueEvents(odEvents);
+        currEcoAmt.setAmount(currBalance.abs().toPlainString());
+        return ndodXmlCurrDay;
+    }
+
+    // 4. Repayment while still overdue
+    if (currBalance.compareTo(prevBalance) > 0 && currOverdue && prevOverdue) {
+        BigDecimal repay = prevODVal.min(prevBalance.subtract(currBalance).abs());
+        OverdueEvents odEvents = new OverdueEvents();
+        OverdueEvent od = new OverdueEvent();
+        od.setAmount(prevODAmt);
+        od.setDate(prevODDate);
+        RepaymentEvents rpdEvents = new RepaymentEvents();
+        RepaymentEvent rpd = new RepaymentEvent();
+        rpd.setAmount(repay.toPlainString());
+        rpd.setDate(currentDateStr);
+        rpdEvents.setRepaymentEvent(rpd);
+        od.setRepaymentEvents(rpdEvents);
+
+        odEvents.setOverdueEvent(od);
+        currEcoAmt.setOverdueEvents(odEvents);
+        currEcoAmt.setAmount(currBalance.abs().toPlainString());
+        return ndodXmlCurrDay;
+    }
+
+    // 5. OD fully cleared (overdue to positive)
+    if (!currOverdue && prevOverdue) {
+        if (prevODAmt != null && prevODDate != null) {
+            OverdueEvents odEvents = new OverdueEvents();
+            OverdueEvent od = new OverdueEvent();
+            od.setAmount(prevODAmt);
+            od.setDate(prevODDate);
+
+            RepaymentEvents rpdEvents = new RepaymentEvents();
+            RepaymentEvent rpd = new RepaymentEvent();
+            rpd.setAmount(prevODAmt);
+            rpd.setDate(currentDateStr);
+            rpdEvents.setRepaymentEvent(rpd);
+            od.setRepaymentEvents(rpdEvents);
+            odEvents.setOverdueEvent(od);
+            currEcoAmt.setOverdueEvents(odEvents);
+        }
+        // For transition-to-positive day, set EP = 0 (per rule)
+        currEcoAmt.setAmount("0");
+        return ndodXmlCurrDay;
+    }
+
+    // 6. New OD (from positive/non-OD to overdue)
+    if (currOverdue && !prevOverdue) {
+        OverdueEvents odEvents = new OverdueEvents();
+        OverdueEvent od = new OverdueEvent();
+        od.setAmount(currOD.toPlainString());
+        od.setDate(currentDateStr);
+        odEvents.setOverdueEvent(od);
+        currEcoAmt.setOverdueEvents(odEvents);
+        currEcoAmt.setAmount(currBalance.abs().toPlainString());
+        return ndodXmlCurrDay;
+    }
+
+    // 7. Not overdue, not cleared OD: Only set EP, remove OD/RPD
+    currEcoAmt.setAmount(currBalance.abs().toPlainString());
+    currEcoAmt.setOverdueEvents(null);
+    return ndodXmlCurrDay;
+}
+
+// --- Helper methods ---
+
+private boolean isNegative(String sign) {
+    return sign != null && ("NEG".equalsIgnoreCase(sign) || "-".equals(sign));
+}
+private boolean isPositive(String sign) {
+    return sign != null && ("POS".equalsIgnoreCase(sign) || "+".equals(sign));
+}
+private String extractAccountNumber(Contract contract) {
+    if (contract.getTransactions() != null
+            && contract.getTransactions().getTransactionList() != null
+            && !contract.getTransactions().getTransactionList().isEmpty()) {
+        Transaction txn = contract.getTransactions().getTransactionList().get(0);
+        if (txn.getAccountData() != null) {
+            return txn.getAccountData().getAccountNumber();
+        }
+    }
+    return null;
+}
