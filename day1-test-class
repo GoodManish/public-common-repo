@@ -1,0 +1,40 @@
+package com.socgen.gtba.ndod.util;
+
+import com.socgen.gtba.ndod.model.ndod.Topic;
+import org.apache.commons.lang3.tuple.Triple;
+
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.Unmarshaller;
+import javax.xml.bind.Marshaller;
+import java.io.File;
+
+public class NdodTestRunner {
+
+    public static void main(String[] args) throws Exception {
+        // 1. Load Day1 XML as current NDoD XML
+        File currXmlFile = new File("src/test/resources/ndod_day1.xml"); // path to your Day1 XML
+        JAXBContext jaxbContext = JAXBContext.newInstance(Topic.class);
+        Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+        Topic currNdodXml = (Topic) unmarshaller.unmarshal(currXmlFile);
+
+        // 2. For Day1, prevNdodXml is null or empty
+        Topic prevNdodXml = null;
+
+        // 3. Prepare processedCtiDetails for Day1
+        Triple<String, String, String> processedCtiDetails =
+                Triple.of("190909721002", "+", "400.00"); // leadAccountNo, sign, balance
+
+        // 4. Call your calculation method
+        FinalNdodFileProcessor processor = new FinalNdodFileProcessor();
+        Topic updatedTopic = processor.generateFinalNdodXml(
+                processedCtiDetails,
+                currNdodXml,
+                prevNdodXml
+        );
+
+        // 5. Print the result as XML to console for manual verification
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+        marshaller.marshal(updatedTopic, System.out);
+    }
+}
