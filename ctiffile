@@ -1,0 +1,146 @@
+public Topic generateFinalNdodXml(
+        String processedCtiDetails, // If you need to parse/extract more fields, do it above
+        Topic ndodXmlCurrDay,
+        Topic ndodXmlPrevDay,
+        int limit,
+        String currentDateStr) {
+
+    if (ndodXmlCurrDay == null || ndodXmlCurrDay.getContracts() == null
+            || ndodXmlCurrDay.getContracts().getContractList() == null
+            || ndodXmlCurrDay.getContracts().getContractList().isEmpty()) {
+        // Defensive: no contract to process
+        return ndodXmlCurrDay;
+    }
+
+    Contract currContract = ndodXmlCurrDay.getContracts().getContractList().get(0);
+
+    Contract prevContract = null;
+    if (ndodXmlPrevDay != null && ndodXmlPrevDay.getContracts() != null
+            && ndodXmlPrevDay.getContracts().getContractList() != null
+            && !ndodXmlPrevDay.getContracts().getContractList().isEmpty()) {
+        prevContract = ndodXmlPrevDay.getContracts().getContractList().get(0);
+    }
+
+    // Read economic positions and events
+    EconomicPositions currEcoPos = currContract.getEconomicPositions();
+    EconomicPositions prevEcoPos = prevContract != null ? prevContract.getEconomicPositions() : null;
+
+    EconomicAmount currEcoAmt = currEcoPos.getEconomicAmountList().get(0);
+    EconomicAmount prevEcoAmt = prevEcoPos != null ? prevEcoPos.getEconomicAmountList().get(0) : null;
+
+    // Read current/prev balances from Economic Amount (or from processedCtiDetails if you wish)
+    double currBalance = Double.parseDouble(currEcoAmt.getAmount());
+    double prevBalance = prevEcoAmt != null ? Double.parseDouble(prevEcoAmt.getAmount()) : 0;
+
+    // --- Core logic below ---
+
+    // Get or create OverdueEvents and RepaymentEvents
+    OverdueEvents currOverdueEvents = currEcoAmt.getOverdueEvents();
+    if (currOverdueEvents == null) {
+        currOverdueEvents = new OverdueEvents();
+        currEcoAmt.setOverdueEvents(currOverdueEvents);
+    }
+    RepaymentEvents currRepaymentEvents = null;
+    if (currOverdueEvents.getOverdueEvent() != null && !currOverdueEvents.getOverdueEvent().isEmpty()) {
+        currRepaymentEvents = currOverdueEvents.getOverdueEvent().get(0).getRepaymentEvents();
+        if (currRepaymentEvents == null) {
+            currRepaymentEvents = new RepaymentEvents();
+            currOverdueEvents.getOverdueEvent().get(0).setRepaymentEvents(currRepaymentEvents);
+        }
+    }
+
+    // Wipe/prepare event lists as needed (only if you want to clean/replace each day)
+    currOverdueEvents.setOverdueEvent(new ArrayList<>());
+    if (currRepaymentEvents != null) {
+        currRepaymentEvents.setRepaymentEventList(new ArrayList<>());
+    }
+
+    // Apply your Excel-based golden rules:
+
+    // 1. Determine OD (Overdue), RPD (Repayment), and EP (Exposure) for this day.
+    //    This follows your Excel's "Report?" comments and rule logic.
+
+    double odToReport = 0;
+    double rpdToReport = 0;
+
+    // Rule: If CurrBal < PrevBal --> New OD event (no RPD)
+    if (currBalance < prevBalance) {
+        odToReport = prevBalance - currBalance;
+        // Add OD event (overdue)
+        OverdueEvent odEvent = new OverdueEvent();
+        odEvent.setIdentifier("ODV");  // Use your OD identifier
+        odEvent.setType("006");
+        odEvent.setAmount(String.format("%.2f", odToReport));
+        odEvent.setCurrency(currEcoAmt.getCurrency());
+        odEvent.setDate(currentDateStr);
+        currOverdueEvents.getOverdueEvent().add(odEvent);
+        // No RPD event
+    }
+    // Rule: If CurrBal == PrevBal --> Carry OD event, no RPD (date should not change)
+    else if (currBalance == prevBalance && prevEcoAmt != null && prevEcoAmt.getOverdueEvents() != null
+            && !prevEcoAmt.getOverdueEvents().getOverdueEvent().isEmpty()) {
+        OverdueEvent prevOd = prevEcoAmt.getOverdueEvents().getOverdueEvent().get(0);
+        OverdueEvent odEvent = new OverdueEvent();
+        odEvent.setIdentifier(prevOd.getIdentifier());
+        odEvent.setType(prevOd.getType());
+        odEvent.setAmount(prevOd.getAmount());
+        odEvent.setCurrency(prevOd.getCurrency());
+        odEvent.setDate(prevOd.getDate());
+        currOverdueEvents.getOverdueEvent().add(odEvent);
+    }
+    // Rule: If CurrBal > PrevBal
+    else if (currBalance > prevBalance) {
+        rpdToReport = currBalance - prevBalance;
+        // Remove OD if cleared (i.e., no OD, only RPD if currBal >= limit)
+        if (currBalance >= -limit) {
+            // No OD event, but RPD (Repayment) event
+            RepaymentEvent rpdEvent = new RepaymentEvent();
+            rpdEvent.setIdentifier("RPF");  // Use your RPD identifier
+            rpdEvent.setType("012");
+            rpdEvent.setAmount(String.format("%.2f", rpdToReport));
+            rpdEvent.setCurrency(currEcoAmt.getCurrency());
+            rpdEvent.setDate(currentDateStr);
+            // Set repaymentEvents on overdueEvent, create if missing
+            OverdueEvent dummyOd = new OverdueEvent();
+            dummyOd.setIdentifier("ODV");
+            dummyOd.setType("006");
+            dummyOd.setAmount("0.00");
+            dummyOd.setCurrency(currEcoAmt.getCurrency());
+            dummyOd.setDate(currentDateStr);
+            RepaymentEvents re = new RepaymentEvents();
+            re.setRepaymentEventList(new ArrayList<>());
+            re.getRepaymentEventList().add(rpdEvent);
+            dummyOd.setRepaymentEvents(re);
+            currOverdueEvents.getOverdueEvent().add(dummyOd);
+        } else {
+            // OD event still exists, carry with new RPD event
+            OverdueEvent prevOd = prevEcoAmt != null && prevEcoAmt.getOverdueEvents() != null
+                    && !prevEcoAmt.getOverdueEvents().getOverdueEvent().isEmpty()
+                    ? prevEcoAmt.getOverdueEvents().getOverdueEvent().get(0) : null;
+            if (prevOd != null) {
+                OverdueEvent odEvent = new OverdueEvent();
+                odEvent.setIdentifier(prevOd.getIdentifier());
+                odEvent.setType(prevOd.getType());
+                odEvent.setAmount(prevOd.getAmount());
+                odEvent.setCurrency(prevOd.getCurrency());
+                odEvent.setDate(prevOd.getDate());
+                // Add RPD event
+                RepaymentEvent rpdEvent = new RepaymentEvent();
+                rpdEvent.setIdentifier("RPF");
+                rpdEvent.setType("012");
+                rpdEvent.setAmount(String.format("%.2f", rpdToReport));
+                rpdEvent.setCurrency(currEcoAmt.getCurrency());
+                rpdEvent.setDate(currentDateStr);
+                RepaymentEvents re = new RepaymentEvents();
+                re.setRepaymentEventList(new ArrayList<>());
+                re.getRepaymentEventList().add(rpdEvent);
+                odEvent.setRepaymentEvents(re);
+                currOverdueEvents.getOverdueEvent().add(odEvent);
+            }
+        }
+    }
+    // EP logic: You can update currEcoAmt.setAmount(String.valueOf(Math.abs(currBalance)));
+
+    // Finally return the updated object (ndodXmlCurrDay)
+    return ndodXmlCurrDay;
+}
