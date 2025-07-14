@@ -1,0 +1,137 @@
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+
+public Topic generateFinalNdodXml(
+    Map<String, Triple<String, String, String>> ctiMap,
+    Topic currNdodTopic,
+    Topic prevNdodTopic,
+    String todayStr
+) {
+    // For each contract in the current day
+    List<Contract> currContracts = currNdodTopic.getContracts().getContract();
+
+    // Defensive: to remove contracts if nothing should be reported
+    List<Contract> contractsToRemove = new ArrayList<>();
+
+    for (Contract currContract : currContracts) {
+        String leadAccount = currContract.getTransactions().getTransaction().getIdentifier();
+
+        Triple<String, String, String> cti = ctiMap.get(leadAccount);
+        if (cti == null) continue; // No current data for this contract/account
+
+        // Get today's balance from CTI
+        BigDecimal absBal = new BigDecimal(cti.getRight());
+        String sign = cti.getMiddle();
+        BigDecimal currBal = "NEG".equalsIgnoreCase(sign) ? absBal.negate() : absBal;
+
+        // Overdraft limit from contract
+        BigDecimal limit = currContract.getOverdraftLimit().getAmount();
+
+        // Find previous contract for same lead account, if any
+        Contract prevContract = prevNdodTopic != null
+            ? findContractByLeadAccount(prevNdodTopic, leadAccount)
+            : null;
+
+        // Build previous day's info
+        BigDecimal prevBal = null, prevOD = null;
+        String prevODDate = null;
+        if (prevContract != null) {
+            prevBal = prevContract.getEconomicAmount();
+            prevOD = prevContract.hasOverdueEvent() ? prevContract.getOverdueEventAmount() : null;
+            prevODDate = prevContract.hasOverdueEvent() ? prevContract.getOverdueEventDate() : null;
+        }
+
+        // Remove all previous OD/RPD events from current contract
+        currContract.removeOverdueEvent();
+        currContract.removeRepaymentEvent();
+
+        boolean currOverdue = currBal.compareTo(limit.negate()) < 0;
+        boolean prevOverdue = prevBal != null && prevBal.compareTo(limit.negate()) < 0;
+
+        BigDecimal currOD = currOverdue ? currBal.abs().subtract(limit) : BigDecimal.ZERO;
+        BigDecimal prevODVal = prevOverdue ? prevBal.abs().subtract(limit) : BigDecimal.ZERO;
+
+        // 1. First day (no prev contract)
+        if (prevBal == null) {
+            if (currOverdue) {
+                currContract.setOverdueEvent(currOD, todayStr);
+            }
+            currContract.setEconomicAmount(currBal.abs());
+            continue;
+        }
+
+        // 2. Transition from overdue to positive (Golden Source Day 10)
+        if (prevOverdue && currBal.compareTo(BigDecimal.ZERO) > 0) {
+            // RPD = previous day's OD (not full swing!)
+            currContract.setEconomicAmount(BigDecimal.ZERO); // Per Day 10 rule
+            if (prevOD != null && prevOD.compareTo(BigDecimal.ZERO) > 0) {
+                currContract.setOverdueEvent(prevOD, prevODDate); // Carry previous OD event
+                currContract.setRepaymentEvent(prevOD, todayStr); // RPD = previous day's OD
+            }
+            continue;
+        }
+
+        // 3. No change, still overdue (carry OD)
+        if (currBal.compareTo(prevBal) == 0 && currOverdue) {
+            currContract.setOverdueEvent(prevOD, prevODDate);
+            currContract.setEconomicAmount(currBal.abs());
+            continue;
+        }
+
+        // 4. Repayment while still overdue
+        if (currBal.compareTo(prevBal) > 0 && currOverdue) {
+            // Special rule: repay only up to the previous day's OD if needed (e.g., Day 7)
+            BigDecimal repayment = prevODVal.min(prevBal.subtract(currBal).abs());
+            currContract.setOverdueEvent(prevOD, prevODDate); // Carry OD
+            currContract.setRepaymentEvent(repayment, todayStr);
+            currContract.setEconomicAmount(currBal.abs());
+            continue;
+        }
+
+        // 5. Repayment, now not overdue (cleared OD, not overdue anymore)
+        if (currBal.compareTo(prevBal) > 0 && !currOverdue) {
+            if (prevOD != null && prevOD.compareTo(BigDecimal.ZERO) > 0) {
+                currContract.setRepaymentEvent(prevOD, todayStr);
+                currContract.setEconomicAmount(currBal.abs());
+            }
+            continue;
+        }
+
+        // 6. Further overdrawn while both below limit: OD = abs(CurrBal - PrevBal)
+        if (currBal.compareTo(prevBal) < 0 && currOverdue && prevOverdue) {
+            BigDecimal newOD = currBal.subtract(prevBal).abs();
+            currContract.setOverdueEvent(newOD, todayStr);
+            currContract.setEconomicAmount(currBal.abs());
+            continue;
+        }
+
+        // 7. Back to overdue from not overdue: OD = abs(CurrBal) - limit
+        if (currBal.compareTo(prevBal) < 0 && currOverdue && !prevOverdue) {
+            BigDecimal newOD = currBal.abs().subtract(limit);
+            currContract.setOverdueEvent(newOD, todayStr);
+            currContract.setEconomicAmount(currBal.abs());
+            continue;
+        }
+
+        // 8. Not overdue at all: only EP, or possibly omit contract
+        if (!currOverdue) {
+            currContract.setEconomicAmount(currBal.abs());
+        }
+
+        // Remove contract if nothing should be reported (OD/RPD/EP), e.g., Day 11
+        if (!currOverdue && !currContract.hasOverdueEvent() && !currContract.hasRepaymentEvent()
+            && (currContract.getEconomicAmount() == null || currContract.getEconomicAmount().compareTo(BigDecimal.ZERO) == 0)
+        ) {
+            contractsToRemove.add(currContract);
+        }
+    }
+
+    // Actually remove contracts (after loop to avoid concurrent modification)
+    for (Contract c : contractsToRemove) {
+        currNdodTopic.getContracts().getContract().remove(c);
+    }
+
+    return currNdodTopic;
+}
