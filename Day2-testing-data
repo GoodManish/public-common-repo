@@ -1,0 +1,87 @@
+Triple<String, String, String> processedCtiDetails = Triple.of("190909721002", "-", "550.00");
+
+CurrNDODXml:
+<?xml version="1.0" encoding="UTF-8"?>
+<topic language="EN" application_code="CASHHKHG" accounting_closing_date="Day2">
+  <contracts>
+    <contract business_line="PCM" lre_value_label="SG HONGKONG" contract_label="OD" forborne_contract_indication="0" lre_ref="STP" lre_value="3000339278" contractual_updated_end_date="2018-09-01" contractual_initial_end_date="2018-09-01" effective_date="2017-09-25" identifier="DEAL1-CM1">
+      <third_parties>
+        <third_party identifier="AXH7756" third_party_label="BOHAI CHEMICAL (HK) LTD" local_referential="BDR" local_identifier="190909721" referential="RCT"/>
+      </third_parties>
+      <transactions>
+        <transaction lre_value_label="SG HONGKONG" lre_ref="STP" lre_value="3000339278" effective_date="2017-09-25" identifier="190909721002" group_product_code_label="DEMAND DEPOSIT ACCOUNT FOR BUSINESS PURPOSES" transaction_label="OD" ifrs9="AMO" prudential_classification="1" basel_portfolio="13" contractual_updated_maturity_date="2018-09-01" contractual_initial_maturity_date="2018-09-01" group_product_ref="RPG" group_product_code="000020">
+          <third_parties>
+            <third_party role="01" identifier="AXH7756" third_party_label="ILFS TRANSPORTATION NETWORKS LIMITED" local_referential="BDR" local_identifier="190909721" referential="RCT"/>
+          </third_parties>
+          <account_data account_contraction_indication="0">
+            <overdraft_limit_data currency="CNH" amount="500.00"/>
+            <economic_positions>
+              <economic_amount identifier="DEAL1-CM1" currency="CNH" balance_sheet_indicator="1" type="CM" amount="550.00"/>
+            </economic_positions>
+          </account_data>
+        </transaction>
+      </transactions>
+    </contract>
+  </contracts>
+</topic>
+
+
+PrevNDODXml:
+<?xml version="1.0" encoding="UTF-8"?>
+<topic language="EN" application_code="CASHHKHG" accounting_closing_date="Day1">
+  <contracts>
+    <contract business_line="PCM" lre_value_label="SG HONGKONG" contract_label="OD" forborne_contract_indication="0" lre_ref="STP" lre_value="3000339278" contractual_updated_end_date="2018-09-01" contractual_initial_end_date="2018-09-01" effective_date="2017-09-25" identifier="DEAL1-CM1">
+      <third_parties>
+        <third_party identifier="AXH7756" third_party_label="BOHAI CHEMICAL (HK) LTD" local_referential="BDR" local_identifier="190909721" referential="RCT"/>
+      </third_parties>
+      <transactions>
+        <transaction lre_value_label="SG HONGKONG" lre_ref="STP" lre_value="3000339278" effective_date="2017-09-25" identifier="190909721002" group_product_code_label="DEMAND DEPOSIT ACCOUNT FOR BUSINESS PURPOSES" transaction_label="OD" ifrs9="AMO" prudential_classification="1" basel_portfolio="13" contractual_updated_maturity_date="2018-09-01" contractual_initial_maturity_date="2018-09-01" group_product_ref="RPG" group_product_code="000020">
+          <third_parties>
+            <third_party role="01" identifier="AXH7756" third_party_label="ILFS TRANSPORTATION NETWORKS LIMITED" local_referential="BDR" local_identifier="190909721" referential="RCT"/>
+          </third_parties>
+          <account_data account_contraction_indication="0">
+            <overdraft_limit_data currency="CNH" amount="500.00"/>
+            <economic_positions>
+              <economic_amount identifier="DEAL1-CM1" currency="CNH" balance_sheet_indicator="1" type="CM" amount="400.00"/>
+            </economic_positions>
+          </account_data>
+        </transaction>
+      </transactions>
+    </contract>
+  </contracts>
+</topic>
+
+
+
+OUTPUT:
+<?xml version="1.0" encoding="UTF-8"?>
+<topic language="EN" application_code="CASHHKHG" accounting_closing_date="Day2">
+  <contracts>
+    <contract business_line="PCM" lre_value_label="SG HONGKONG" contract_label="OD" forborne_contract_indication="0" lre_ref="STP" lre_value="3000339278" contractual_updated_end_date="2018-09-01" contractual_initial_end_date="2018-09-01" effective_date="2017-09-25" identifier="DEAL1-CM1">
+      <third_parties>
+        <third_party identifier="AXH7756" third_party_label="BOHAI CHEMICAL (HK) LTD" local_referential="BDR" local_identifier="190909721" referential="RCT"/>
+      </third_parties>
+      <transactions>
+        <transaction lre_value_label="SG HONGKONG" lre_ref="STP" lre_value="3000339278" effective_date="2017-09-25" identifier="190909721002" group_product_code_label="DEMAND DEPOSIT ACCOUNT FOR BUSINESS PURPOSES" transaction_label="OD" ifrs9="AMO" prudential_classification="1" basel_portfolio="13" contractual_updated_maturity_date="2018-09-01" contractual_initial_maturity_date="2018-09-01" group_product_ref="RPG" group_product_code="000020">
+          <third_parties>
+            <third_party role="01" identifier="AXH7756" third_party_label="ILFS TRANSPORTATION NETWORKS LIMITED" local_referential="BDR" local_identifier="190909721" referential="RCT"/>
+          </third_parties>
+          <account_data account_contraction_indication="0">
+            <overdraft_limit_data currency="CNH" amount="500.00"/>
+            <economic_positions>
+              <economic_amount identifier="DEAL1-CM1" currency="CNH" balance_sheet_indicator="1" type="CM" amount="550.00">
+                <overdue_events>
+                  <overdue_event>
+                    <amount>50.00</amount>
+                    <date>2024-07-13</date>
+                  </overdue_event>
+                </overdue_events>
+              </economic_amount>
+            </economic_positions>
+          </account_data>
+        </transaction>
+      </transactions>
+    </contract>
+  </contracts>
+</topic>
+
