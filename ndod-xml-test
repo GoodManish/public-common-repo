@@ -1,0 +1,50 @@
+import org.apache.commons.lang3.tuple.Triple;
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.Unmarshaller;
+import jakarta.xml.bind.Marshaller;
+import java.io.File;
+import java.nio.file.Paths;
+
+public class NdodXmlTest {
+
+    public static void main(String[] args) throws Exception {
+        // Folder for the test case (adjust for each day)
+        String testFolder = "src/main/resources/ndod-test-cases/D1";
+
+        // 1. Load ndodXmlCurrDay
+        Topic ndodXmlCurrDay = unmarshalFromFile(Paths.get(testFolder, "ndod-xml-curr.xml").toFile());
+
+        // 2. Load ndodXmlPrevDay (if present, else null)
+        File prevDayFile = Paths.get(testFolder, "ndod-xml-prev.xml").toFile();
+        Topic ndodXmlPrevDay = prevDayFile.exists() && prevDayFile.length() > 0 ? unmarshalFromFile(prevDayFile) : null;
+
+        // 3. Feed CTI details (manually, per your approach)
+        // For Day 1: Account 190909721002, sign "-", value "400"
+        Triple<String, String, String> ctiDetails = Triple.of("190909721002", "-", "400");
+
+        // 4. Call your processing method
+        Topic result = generateFinalNdodXml(ndodXmlCurrDay, ndodXmlPrevDay, ctiDetails);
+
+        // 5. Write result to a file or print
+        marshalToFile(result, Paths.get(testFolder, "result-final.xml").toFile());
+
+        System.out.println("Resulting XML written to: " + Paths.get(testFolder, "result-final.xml").toAbsolutePath());
+
+        // Optional: Load expected-final.xml and compare for auto-check (you can add code here)
+    }
+
+    // JAXB unmarshalling helper
+    public static Topic unmarshalFromFile(File input) throws Exception {
+        JAXBContext context = JAXBContext.newInstance(Topic.class);
+        Unmarshaller unmarshaller = context.createUnmarshaller();
+        return (Topic) unmarshaller.unmarshal(input);
+    }
+
+    // JAXB marshalling helper
+    public static void marshalToFile(Topic topic, File output) throws Exception {
+        JAXBContext context = JAXBContext.newInstance(Topic.class);
+        Marshaller marshaller = context.createMarshaller();
+        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+        marshaller.marshal(topic, output);
+    }
+}
