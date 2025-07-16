@@ -1,0 +1,179 @@
+public Topic generateFinalNdodXml(
+        Triple<String, String, String> processedCtiDetails, // (leadAccount, sign, balance)
+        Topic ndodXmlCurrDay,
+        Topic ndodXmlPrevDay) {
+
+    // Early exit for empty
+    if (ndodXmlCurrDay == null
+            || ndodXmlCurrDay.getContracts() == null
+            || ndodXmlCurrDay.getContracts().getContract() == null
+            || ndodXmlCurrDay.getContracts().getContract().isEmpty()) {
+        return ndodXmlCurrDay;
+    }
+
+    String leadAccountNumber = processedCtiDetails.getLeft();
+    String sign = processedCtiDetails.getMiddle();
+    String balanceStr = processedCtiDetails.getRight();
+
+    // Parse today's balance (support for sign)
+    BigDecimal currBalance;
+    try {
+        currBalance = new BigDecimal(balanceStr);
+        if ("-".equals(sign)) currBalance = currBalance.abs().negate();
+        else currBalance = currBalance.abs();
+    } catch (Exception ex) {
+        currBalance = BigDecimal.ZERO;
+    }
+
+    // Find contract for this account
+    Contract currContract = ndodXmlCurrDay.getContracts().getContract().stream()
+            .filter(c -> leadAccountNumber.equals(extractAccountNumber(c)))
+            .findFirst().orElse(null);
+    if (currContract == null) return ndodXmlCurrDay;
+
+    // Previous day's contract (optional)
+    Contract prevContract = (ndodXmlPrevDay != null && ndodXmlPrevDay.getContracts() != null)
+            ? ndodXmlPrevDay.getContracts().getContract().stream()
+                .filter(c -> leadAccountNumber.equals(extractAccountNumber(c)))
+                .findFirst().orElse(null)
+            : null;
+
+    // EconomicAmount for this day and prev day
+    EconomicAmount currEcoAmt = extractEconomicAmount(currContract);
+    EconomicAmount prevEcoAmt = extractEconomicAmount(prevContract);
+
+    // Overdraft limit
+    BigDecimal limit = extractOverdraftLimit(currContract);
+
+    // Previous balance
+    BigDecimal prevBalance = prevEcoAmt != null ? safeBigDecimal(prevEcoAmt.getAmount()) : null;
+
+    // Load OD identifier state from Artemis queue (consume)
+    OdIdentifierState odIdState = null;
+    try {
+        odIdState = (OdIdentifierState) jmsTemplate.receiveAndConvert("OD_ID_QUEUE");
+    } catch (Exception ex) {
+        // log error
+        odIdState = null;
+    }
+    int odCounter = 0;
+    if (odIdState != null && leadAccountNumber.equals(odIdState.getLeadAccountNumber())) {
+        odCounter = odIdState.getCounter();
+    }
+
+    // Figure out if this is a new OD event, carryforward, or none
+    boolean isFirstDay = (prevEcoAmt == null);
+    boolean newOdEvent = false;
+    boolean carryForwardOd = false;
+
+    // Helper for yesterday's date
+    String currDateMinus1 = LocalDate.now().minusDays(1).toString();
+
+    BigDecimal odAmount = BigDecimal.ZERO;
+    String prevOdIdentifier = null;
+    String prevOdDate = null;
+
+    if (!isFirstDay) {
+        // Find previous day's OD event (if any)
+        OverdueEvents prevOdEvents = prevEcoAmt.getOverdueEvents();
+        OverdueEvent prevOdEvent = (prevOdEvents != null && prevOdEvents.getOverdueEvent() != null && !prevOdEvents.getOverdueEvent().isEmpty())
+                ? prevOdEvents.getOverdueEvent().get(0)
+                : null;
+        prevOdIdentifier = prevOdEvent != null ? prevOdEvent.getIdentifier() : null;
+        prevOdDate = prevOdEvent != null ? prevOdEvent.getDate() : null;
+    }
+
+    // Golden source OD/RPD event logic
+    if (isFirstDay) {
+        // DAY 1: Only EP event if negative but not over limit
+        if (currBalance.compareTo(BigDecimal.ZERO) < 0 && currBalance.compareTo(limit.negate()) > 0) {
+            currEcoAmt.setAmount(currBalance.abs().toPlainString());
+            currEcoAmt.setOverdueEvents(null); // No OD on first day
+        }
+    } else {
+        // Compare current and previous balance
+        int cmp = currBalance.compareTo(prevBalance);
+
+        // New OD event
+        if (cmp < 0 && currBalance.compareTo(limit.negate()) < 0) {
+            // New OD event detected
+            newOdEvent = true;
+            odCounter++;
+            odAmount = currBalance.subtract(limit.negate()).abs();
+
+            OverdueEvents odEvents = new OverdueEvents();
+            OverdueEvent odEvent = new OverdueEvent();
+            odEvent.setAmount(odAmount.toPlainString());
+            odEvent.setDate(currDateMinus1);
+            odEvent.setIdentifier(leadAccountNumber + "-CM" + odCounter);
+
+            odEvents.setOverdueEvent(Collections.singletonList(odEvent));
+            currEcoAmt.setOverdueEvents(odEvents);
+
+            // Save updated counter to Artemis queue for next day
+            OdIdentifierState newState = new OdIdentifierState();
+            newState.setLeadAccountNumber(leadAccountNumber);
+            newState.setCounter(odCounter);
+            jmsTemplate.convertAndSend("OD_ID_QUEUE", newState);
+
+        } else if (currBalance.compareTo(prevBalance) == 0 && prevOdIdentifier != null) {
+            // Carry forward OD event, no change to identifier/date
+            carryForwardOd = true;
+            OverdueEvents odEvents = new OverdueEvents();
+            OverdueEvent odEvent = new OverdueEvent();
+            odEvent.setAmount(prevEcoAmt.getOverdueEvents().getOverdueEvent().get(0).getAmount());
+            odEvent.setDate(prevOdDate);
+            odEvent.setIdentifier(prevOdIdentifier);
+
+            odEvents.setOverdueEvent(Collections.singletonList(odEvent));
+            currEcoAmt.setOverdueEvents(odEvents);
+
+            // Do NOT update queue
+        } else {
+            // No OD event (reset if needed)
+            currEcoAmt.setOverdueEvents(null);
+        }
+        // (Add RPD event logic here if needed...)
+    }
+
+    return ndodXmlCurrDay;
+}
+
+// -- Helper methods used above: --
+
+private EconomicAmount extractEconomicAmount(Contract contract) {
+    if (contract == null || contract.getTransactions() == null
+            || contract.getTransactions().getTransactionList() == null
+            || contract.getTransactions().getTransactionList().isEmpty()) return null;
+    Transaction txn = contract.getTransactions().getTransactionList().get(0);
+    if (txn.getAccountData() == null || txn.getAccountData().getEconomicPositions() == null
+            || txn.getAccountData().getEconomicPositions().getEconomicAmountList() == null
+            || txn.getAccountData().getEconomicPositions().getEconomicAmountList().isEmpty()) return null;
+    return txn.getAccountData().getEconomicPositions().getEconomicAmountList().get(0);
+}
+
+private String extractAccountNumber(Contract contract) {
+    if (contract == null || contract.getTransactions() == null
+            || contract.getTransactions().getTransactionList() == null
+            || contract.getTransactions().getTransactionList().isEmpty()) return null;
+    Transaction txn = contract.getTransactions().getTransactionList().get(0);
+    return txn != null ? txn.getIdentifier() : null;
+}
+
+private BigDecimal extractOverdraftLimit(Contract contract) {
+    if (contract == null || contract.getTransactions() == null
+            || contract.getTransactions().getTransactionList() == null
+            || contract.getTransactions().getTransactionList().isEmpty()) return BigDecimal.ZERO;
+    Transaction txn = contract.getTransactions().getTransactionList().get(0);
+    if (txn.getAccountData() == null || txn.getAccountData().getOverdraftLimitData() == null
+            || txn.getAccountData().getOverdraftLimitData().getAmount() == null) return BigDecimal.ZERO;
+    try {
+        return new BigDecimal(txn.getAccountData().getOverdraftLimitData().getAmount());
+    } catch (Exception e) {
+        return BigDecimal.ZERO;
+    }
+}
+
+private BigDecimal safeBigDecimal(String val) {
+    try { return new BigDecimal(val); } catch (Exception e) { return BigDecimal.ZERO; }
+}
