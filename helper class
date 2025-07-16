@@ -1,0 +1,62 @@
+private BigDecimal parseSignedBalance(String value, String sign) {
+    try {
+        BigDecimal amount = new BigDecimal(value);
+        if ("-".equals(sign)) {
+            return amount.abs().negate();
+        } else {
+            return amount.abs(); // handles "+" or any other sign as positive
+        }
+    } catch (Exception ex) {
+        return BigDecimal.ZERO;
+    }
+}
+private Contract findContractByLeadAccount(Topic topic, String leadAccountNumber) {
+    if (topic == null || topic.getContracts() == null || topic.getContracts().getContract() == null)
+        return null;
+    for (Contract contract : topic.getContracts().getContract()) {
+        if (contract == null || contract.getTransactions() == null ||
+            contract.getTransactions().getTransactionList() == null ||
+            contract.getTransactions().getTransactionList().isEmpty())
+            continue;
+        Transaction txn = contract.getTransactions().getTransactionList().get(0);
+        if (txn != null && leadAccountNumber.equals(txn.getIdentifier())) {
+            return contract;
+        }
+    }
+    return null;
+}
+
+private BigDecimal extractLimitFromContract(Contract contract) {
+    if (contract == null || contract.getTransactions() == null ||
+        contract.getTransactions().getTransactionList() == null ||
+        contract.getTransactions().getTransactionList().isEmpty())
+        return BigDecimal.ZERO;
+    Transaction txn = contract.getTransactions().getTransactionList().get(0);
+    if (txn == null || txn.getAccountData() == null || txn.getAccountData().getOverdraftLimitData() == null)
+        return BigDecimal.ZERO;
+    String amountStr = txn.getAccountData().getOverdraftLimitData().getAmount();
+    try {
+        return new BigDecimal(amountStr);
+    } catch (Exception e) {
+        return BigDecimal.ZERO;
+    }
+}
+
+
+private EconomicAmount getPrevEconomicAmount(Topic prevTopic, String leadAccountNumber) {
+    if (prevTopic == null) return null;
+    Contract prevContract = findContractByLeadAccount(prevTopic, leadAccountNumber);
+    if (prevContract == null || prevContract.getTransactions() == null ||
+        prevContract.getTransactions().getTransactionList() == null ||
+        prevContract.getTransactions().getTransactionList().isEmpty())
+        return null;
+    Transaction txn = prevContract.getTransactions().getTransactionList().get(0);
+    if (txn.getAccountData() == null || txn.getAccountData().getEconomicPositions() == null ||
+        txn.getAccountData().getEconomicPositions().getEconomicAmountList() == null ||
+        txn.getAccountData().getEconomicPositions().getEconomicAmountList().isEmpty())
+        return null;
+    return txn.getAccountData().getEconomicPositions().getEconomicAmountList().get(0);
+}
+
+
+
