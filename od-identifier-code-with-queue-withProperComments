@@ -1,0 +1,143 @@
+@Autowired
+private JmsTemplate jmsTemplate; // For Artemis OD identifier queue
+
+private static final String OD_IDENTIFIER_QUEUE = "OD_IDENTIFIER_QUEUE";
+
+// You may need to define this somewhere in your codebase
+public static class OdIdentifier implements Serializable {
+    private String leadAccountNumber;
+    private int odCounter; // Increment for each new OD
+    // getters/setters/constructors omitted for brevity
+}
+
+public Topic generateFinalNdodXml(
+        Triple<String, String, String> processedCtiDetails,
+        Topic ndodXmlCurrDay,
+        Topic ndodXmlPrevDay) {
+
+    // 1. Extract CTI details and parse
+    String leadAccountNumber = processedCtiDetails.getLeft();
+    String sign = processedCtiDetails.getMiddle();
+    String balanceStr = processedCtiDetails.getRight();
+    BigDecimal currBalance = parseSignedBalance(balanceStr, sign); // implement this method
+
+    // 2. Find contract for lead account number
+    Contract currContract = findContractByLeadAccount(ndodXmlCurrDay, leadAccountNumber);
+    if (currContract == null) return ndodXmlCurrDay;
+
+    // 3. Get Overdraft limit, Economic Amount, previous day info
+    BigDecimal limit = extractLimitFromContract(currContract); // implement this helper
+    EconomicAmount currEcoAmt = getEconomicAmount(currContract);
+    EconomicAmount prevEcoAmt = getPrevEconomicAmount(ndodXmlPrevDay, leadAccountNumber);
+    BigDecimal prevBalance = (prevEcoAmt != null) ? new BigDecimal(prevEcoAmt.getAmount()) : BigDecimal.ZERO;
+
+    // 4. Variables for OD/RPD events
+    OverdueEvents currOdEvents = new OverdueEvents();
+    OverdueEvent currOdEvent = new OverdueEvent();
+    String prevOdIdentifier = null;
+    String prevOdDate = null;
+
+    if (prevEcoAmt != null && prevEcoAmt.getOverdueEvents() != null
+        && !prevEcoAmt.getOverdueEvents().getOverdueEvent().isEmpty()) {
+        OverdueEvent prevOdEvent = prevEcoAmt.getOverdueEvents().getOverdueEvent().get(0);
+        prevOdIdentifier = prevOdEvent.getIdentifier();
+        prevOdDate = prevOdEvent.getDate();
+    }
+
+    // -- SCENARIO LOGIC STARTS HERE -- //
+
+    // 1. First day, negative balance within limit, no OD, no RPD
+    if (ndodXmlPrevDay == null && currBalance.compareTo(BigDecimal.ZERO) < 0 && currBalance.compareTo(limit) > 0) {
+        // Set EP only
+        currEcoAmt.setAmount(currBalance.abs().toPlainString());
+        currEcoAmt.setOverdueEvents(null);
+        return ndodXmlCurrDay;
+    }
+
+    // 2. New OD event: currBalance < prevBalance, both < limit (i.e. new OD, not carry forward)
+    if (currBalance.compareTo(prevBalance) < 0 && currBalance.compareTo(limit) < 0 && prevBalance.compareTo(limit) < 0) {
+        // --- OD IDENTIFIER LOGIC START ---
+        // Fetch the current counter from Artemis queue
+        OdIdentifier odId = getOdIdentifierFromQueue(leadAccountNumber);
+        if (odId == null) {
+            odId = new OdIdentifier(leadAccountNumber, 1);
+        } else {
+            odId.setOdCounter(odId.getOdCounter() + 1);
+        }
+        // Set the new OD event identifier and date
+        currOdEvent.setIdentifier(leadAccountNumber + "-CM" + odId.getOdCounter());
+        currOdEvent.setAmount(currBalance.subtract(prevBalance).abs().toPlainString());
+        currOdEvent.setDate(LocalDate.now().minusDays(1).toString());
+        currOdEvents.setOverdueEvent(Collections.singletonList(currOdEvent));
+        currEcoAmt.setOverdueEvents(currOdEvents);
+        // Send updated counter to queue
+        sendOdIdentifierToQueue(odId);
+        currEcoAmt.setAmount(currBalance.abs().toPlainString());
+        return ndodXmlCurrDay;
+    }
+
+    // 3. Carry forward OD (no change): currBalance == prevBalance && both < limit
+    if (currBalance.compareTo(prevBalance) == 0 && currBalance.compareTo(limit) < 0 && prevBalance.compareTo(limit) < 0) {
+        // Carry forward OD event, reuse identifier and date
+        currOdEvent.setIdentifier(prevOdIdentifier);
+        currOdEvent.setAmount(prevEcoAmt != null ? prevEcoAmt.getOverdueEvents().getOverdueEvent().get(0).getAmount() : "0");
+        currOdEvent.setDate(prevOdDate);
+        currOdEvents.setOverdueEvent(Collections.singletonList(currOdEvent));
+        currEcoAmt.setOverdueEvents(currOdEvents);
+        currEcoAmt.setAmount(currBalance.abs().toPlainString());
+        return ndodXmlCurrDay;
+    }
+
+    // 4. RPD event: currBalance > prevBalance, both < limit
+    if (currBalance.compareTo(prevBalance) > 0 && currBalance.compareTo(limit) < 0 && prevBalance.compareTo(limit) < 0) {
+        // Carry forward OD, new RPD (implement RPD logic as needed)
+        currOdEvent.setIdentifier(prevOdIdentifier);
+        currOdEvent.setAmount(prevEcoAmt != null ? prevEcoAmt.getOverdueEvents().getOverdueEvent().get(0).getAmount() : "0");
+        currOdEvent.setDate(prevOdDate);
+        currOdEvents.setOverdueEvent(Collections.singletonList(currOdEvent));
+        currEcoAmt.setOverdueEvents(currOdEvents);
+        currEcoAmt.setAmount(currBalance.abs().toPlainString());
+        // Set RPD event logic here if needed
+        return ndodXmlCurrDay;
+    }
+
+    // 5. No OD/RPD, balance positive: remove contract
+    if (currBalance.compareTo(BigDecimal.ZERO) > 0) {
+        // Remove the contract from the topic object
+        removeContractByLeadAccount(ndodXmlCurrDay, leadAccountNumber);
+        return ndodXmlCurrDay;
+    }
+
+    // 6. Default: set EP, clear OD/RPD
+    currEcoAmt.setAmount(currBalance.abs().toPlainString());
+    currEcoAmt.setOverdueEvents(null);
+    return ndodXmlCurrDay;
+}
+
+// --- Artemis helper methods ---
+
+private OdIdentifier getOdIdentifierFromQueue(String leadAccountNumber) {
+    try {
+        // receiveSelected (filter by leadAccountNumber) if needed, or just receive
+        Object msg = jmsTemplate.receiveAndConvert(OD_IDENTIFIER_QUEUE);
+        if (msg instanceof OdIdentifier) {
+            OdIdentifier odId = (OdIdentifier) msg;
+            if (leadAccountNumber.equals(odId.getLeadAccountNumber())) {
+                return odId;
+            }
+        }
+    } catch (Exception e) {
+        // log, ignore
+    }
+    return null;
+}
+
+private void sendOdIdentifierToQueue(OdIdentifier odId) {
+    try {
+        jmsTemplate.convertAndSend(OD_IDENTIFIER_QUEUE, odId);
+    } catch (Exception e) {
+        // log error
+    }
+}
+
+// --- Implement your own helper methods as before for parsing balances, extracting limit, etc. ---
