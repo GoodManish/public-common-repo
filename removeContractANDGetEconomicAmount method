@@ -1,0 +1,28 @@
+private EconomicAmount getEconomicAmount(Contract contract) {
+    if (contract == null || contract.getTransactions() == null ||
+        contract.getTransactions().getTransactionList() == null ||
+        contract.getTransactions().getTransactionList().isEmpty())
+        return null;
+    Transaction txn = contract.getTransactions().getTransactionList().get(0);
+    if (txn == null || txn.getAccountData() == null ||
+        txn.getAccountData().getEconomicPositions() == null ||
+        txn.getAccountData().getEconomicPositions().getEconomicAmountList() == null ||
+        txn.getAccountData().getEconomicPositions().getEconomicAmountList().isEmpty())
+        return null;
+    return txn.getAccountData().getEconomicPositions().getEconomicAmountList().get(0);
+}
+
+
+private void removeContractByLeadAccount(Topic topic, String leadAccountNumber) {
+    if (topic == null || topic.getContracts() == null || topic.getContracts().getContract() == null)
+        return;
+    List<Contract> contracts = topic.getContracts().getContract();
+    contracts.removeIf(contract -> {
+        if (contract == null || contract.getTransactions() == null ||
+            contract.getTransactions().getTransactionList() == null ||
+            contract.getTransactions().getTransactionList().isEmpty())
+            return false;
+        Transaction txn = contract.getTransactions().getTransactionList().get(0);
+        return txn != null && leadAccountNumber.equals(txn.getIdentifier());
+    });
+}
