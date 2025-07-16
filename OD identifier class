@@ -1,0 +1,41 @@
+import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlAccessorType;
+import jakarta.xml.bind.annotation.XmlAccessType;
+import jakarta.xml.bind.annotation.XmlElement;
+import java.io.Serializable;
+
+/**
+ * POJO representing the state of the OD identifier for a given account.
+ */
+@XmlRootElement(name = "OdIdentifier")
+@XmlAccessorType(XmlAccessType.FIELD)
+public class OdIdentifier implements Serializable {
+    @XmlElement
+    private String leadAccountNumber; // e.g., 190909721002
+
+    @XmlElement
+    private int odCounter; // e.g., 3 means CM3 is the current OD identifier
+
+    public OdIdentifier() {}
+
+    public OdIdentifier(String leadAccountNumber, int odCounter) {
+        this.leadAccountNumber = leadAccountNumber;
+        this.odCounter = odCounter;
+    }
+
+    public String getLeadAccountNumber() {
+        return leadAccountNumber;
+    }
+
+    public void setLeadAccountNumber(String leadAccountNumber) {
+        this.leadAccountNumber = leadAccountNumber;
+    }
+
+    public int getOdCounter() {
+        return odCounter;
+    }
+
+    public void setOdCounter(int odCounter) {
+        this.odCounter = odCounter;
+    }
+}
