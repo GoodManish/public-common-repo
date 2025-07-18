@@ -1,0 +1,46 @@
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public class TempFileUploaderFromResource {
+
+    public static void main(String[] args) {
+        String resourceFileName = "test.txt"; // File in resources
+
+        try (InputStream resourceStream = TempFileUploaderFromResource.class.getClassLoader().getResourceAsStream(resourceFileName)) {
+            if (resourceStream == null) {
+                throw new FileNotFoundException("Resource not found: " + resourceFileName);
+            }
+
+            // Create a temp file
+            Path tempFilePath = Files.createTempFile("resource_copy_", ".tmp");
+            File tempFile = tempFilePath.toFile();
+
+            // Copy resource InputStream to temp file
+            try (OutputStream out = new FileOutputStream(tempFile)) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = resourceStream.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                }
+            }
+
+            // Now pass this tempFile to your SFTP upload class
+            SftpSend sftpSend = new SftpSend();
+            sftpSend.upload(tempFile);
+
+            // Optional: Delete file after upload
+            // tempFile.delete();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+class SftpSend {
+    public void upload(File file) {
+        System.out.println("Uploading file: " + file.getAbsolutePath());
+        // Implement SFTP upload here
+    }
+}
