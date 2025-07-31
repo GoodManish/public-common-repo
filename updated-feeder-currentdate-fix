@@ -319,3 +319,72 @@ spec:
                     name: s3-secret
                     key: bucketName
               # other secrets and environment vars
+
+
+package com.example.datalake.config;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.*;
+
+import java.net.URI;
+
+@Configuration
+public class ObjectStorageConfiguration {
+
+    @Value("${s3.accessKey}")
+    private String accessKey;
+
+    @Value("${s3.secretKey}")
+    private String secretKey;
+
+    @Value("${s3.region}")
+    private String region;
+
+    @Value("${s3.endpoint}")
+    private String endpoint;
+
+    @Value("${s3.bucketName}")
+    private String bucketName;
+
+    /**
+     * Creates a single S3 client and applies a lifecycle rule that expires objects
+     * older than 7 days, regardless of their date prefix.  Your CsvUploader still
+     * uploads files under date‑based prefixes (e.g. 20250724/table.csv).
+     */
+    @Bean(name = "s3Client")
+    public S3Client s3Client() {
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKey, secretKey);
+        S3Client client = S3Client.builder()
+                .region(Region.of(region))
+                .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .endpointOverride(URI.create(endpoint))
+                .build();
+
+        // Apply a lifecycle rule that expires all objects older than 7 days.
+        // You can optionally scope the rule to a common base folder such as "exports/"
+        // if you don't want to expire unrelated objects in the bucket.
+        LifecycleRule lifecycleRule = LifecycleRule.builder()
+                .id("AutoRemoveOldExports")
+                .expiration(LifecycleExpiration.builder().days(7).build())
+                .status(ExpirationStatus.ENABLED)
+                .build();
+
+        BucketLifecycleConfiguration lifecycleConfig = BucketLifecycleConfiguration.builder()
+                .rules(lifecycleRule)
+                .build();
+
+        client.putBucketLifecycleConfiguration(PutBucketLifecycleConfigurationRequest.builder()
+                .bucket(bucketName)
+                .lifecycleConfiguration(lifecycleConfig)
+                .build());
+
+        return client;
+    }
+}
+
