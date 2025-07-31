@@ -1,0 +1,321 @@
+package com.example.datalake.config;
+
+import java.time.LocalTime;
+import java.time.ZoneId;
+
+import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.format.annotation.DateTimeFormat;
+
+@Configuration
+@ConfigurationProperties(prefix = "job")
+@Data
+public class JobProperties {
+    /**
+     * Daily run time in HH:mm (24-hour) format.
+     * No default is set here; the value must come from configuration.
+     */
+    @DateTimeFormat(pattern = "HH:mm")
+    private LocalTime scheduleTime;
+
+    /**
+     * Time zone for interpreting the schedule.
+     * Defaults to UTC, but can be overridden in configuration.
+     */
+    private ZoneId scheduleZone = ZoneId.of("UTC");
+
+    /**
+     * Date pattern used to format the export date (e.g. yyyyMMdd).
+     */
+    private String datePattern = "yyyyMMdd";
+}
+
+
+
+package com.example.datalake.service;
+
+import com.example.datalake.config.JobProperties;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class DatalakeFeedScheduler {
+
+    private final DatalakeFeeder datalakeFeeder;
+    private final JobProperties jobProperties;
+
+    /**
+     * Called by CsvExportRunner.  Determines the correct date to export and kicks off all table feeds.
+     */
+    public void call() {
+        // Determine current date/time in the schedule's time zone
+        LocalDate today   = LocalDate.now(jobProperties.getScheduleZone());
+        LocalTime nowTime = LocalTime.now(jobProperties.getScheduleZone());
+
+        // Pick yesterday's date if we're retrying before the scheduled time, otherwise use today
+        LocalDate targetDate = nowTime.isBefore(jobProperties.getScheduleTime())
+                ? today.minusDays(1)
+                : today;
+
+        String dateString = targetDate.format(DateTimeFormatter.ofPattern(jobProperties.getDatePattern()));
+        log.info("Processing data for date {}", dateString);
+
+        // fire off asynchronous feeds for each table
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        for (TableSqlEnum table : TableSqlEnum.values()) {
+            futures.add(datalakeFeeder.feed(table.getTableName(), dateString));
+        }
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+    }
+}
+
+
+package com.example.datalake.service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.task.AsyncTaskExecutor;
+restitulis.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class DatalakeFeeder {
+
+    private final CsvGenerator csvGenerator;
+    private final CsvUploader csvUploader;
+    private final AsyncTaskExecutor asyncTaskExecutor;
+
+    @Async("asyncTaskExecutor")
+    public CompletableFuture<Void> feed(String tableName, String dateString) {
+        // generate CSV, then upload it; both stages run on the async executor
+        return CompletableFuture
+            .supplyAsync(() -> csvGenerator.generateCsv(tableName, dateString), asyncTaskExecutor)
+            .thenCompose(csvFile -> CompletableFuture.runAsync(() -> {
+                try {
+                    csvUploader.upload(csvFile, tableName, dateString);
+                } catch (IOException e) {
+                    throw new DatalakeFeederException("Error uploading CSV", e);
+                }
+            }, asyncTaskExecutor));
+    }
+}
+
+
+package com.example.datalake.service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.Objects;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class CsvGenerator {
+
+    private final JdbcTemplate jdbcTemplate;
+    private final CsvHeaderWriter csvHeaderWriter;
+    private final CsvDataWriter csvDataWriter;
+    private final int pageSize;
+
+    public String generateCsv(String tableName, String dateString) {
+        String sanitizedName = tableName.replace("\"", "");
+        TableSqlEnum tableEnum = TableSqlEnum.getByTableName(sanitizedName);
+        // Build SQL condition with a quoted date literal
+        String sqlCondition = tableEnum.getSqlCondition("'" + dateString + "'");
+        String sql = "SELECT * FROM \"" + sanitizedName + "\"" + sqlCondition + LIMIT_OFFSET_SQL_CONDITION;
+
+        try {
+            Path tempFile = Files.createTempFile("datalake_" + sanitizedName + "_", ".csv");
+            try (FileWriter writer = new FileWriter(tempFile.toFile());
+                 Connection conn = Objects.requireNonNull(jdbcTemplate.getDataSource()).getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                int offset = 0;
+                csvHeaderWriter.writeCsvHeader(writer, stmt);
+                do {
+                    csvDataWriter.writeCsvData(writer, stmt, offset, pageSize);
+                    offset += pageSize;
+                } while (hasMoreRows(stmt, offset));
+            }
+            return tempFile.toString();
+        } catch (SQLException e) {
+            throw new CsvGeneratorSQLException("CSV generation failed", e);
+        } catch (IOException e) {
+            throw new CsvGeneratorIOException("CSV generation failed", e);
+        }
+    }
+
+    private boolean hasMoreRows(PreparedStatement stmt, int offset) throws SQLException {
+        stmt.setInt(1, pageSize);
+        stmt.setInt(2, offset);
+        return stmt.executeQuery().next();
+    }
+}
+
+package com.example.datalake.service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.*;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class CsvUploader {
+
+    private final S3Client s3Client;
+    private final String bucketName;
+
+    public void upload(String csvFilePath, String tableName, String dateString) throws IOException {
+        File file = new File(csvFilePath);
+        // Compose an S3 key incorporating the export date and table folder
+        String s3Key = dateString + "/" + Util.getFolderNameFromTableName(tableName) + "/" + file.getName();
+
+        // Initiate multipart upload
+        CreateMultipartUploadResponse createResp = s3Client.createMultipartUpload(CreateMultipartUploadRequest.builder()
+                .bucket(bucketName)
+                .key(s3Key)
+                .build());
+
+        List<CompletedPart> completedParts = new ArrayList<>();
+        String uploadId = createResp.uploadId();
+        int partNumber = 1;
+        ByteBuffer buffer = ByteBuffer.allocate(5 * 1024 * 1024); // 5 MB
+
+        try (var raf = new java.io.RandomAccessFile(file, "r")) {
+            long fileSize = raf.length();
+            long position = 0;
+
+            while (position < fileSize) {
+                raf.seek(position);
+                int bytesRead = raf.getChannel().read(buffer);
+                buffer.flip();
+
+                UploadPartRequest upReq = UploadPartRequest.builder()
+                        .bucket(bucketName)
+                        .key(s3Key)
+                        .uploadId(uploadId)
+                        .partNumber(partNumber)
+                        .contentLength((long) bytesRead)
+                        .build();
+
+                UploadPartResponse upRes = s3Client.uploadPart(upReq, RequestBody.fromByteBuffer(buffer));
+                completedParts.add(CompletedPart.builder()
+                        .partNumber(partNumber)
+                        .eTag(upRes.eTag())
+                        .build());
+
+                buffer.clear();
+                position += bytesRead;
+                partNumber++;
+            }
+        }
+
+        // Complete upload
+        CompletedMultipartUpload completedUpload = CompletedMultipartUpload.builder()
+                .parts(completedParts)
+                .build();
+
+        s3Client.completeMultipartUpload(CompleteMultipartUploadRequest.builder()
+                .bucket(bucketName)
+                .key(s3Key)
+                .uploadId(uploadId)
+                .multipartUpload(completedUpload)
+                .build());
+
+        // Remove the local file
+        Files.deleteIfExists(file.toPath());
+
+        log.info("Uploaded {} to bucket {}/{}", file.getName(), bucketName, s3Key);
+    }
+}
+
+server:
+  port: 9090
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      # other Hikari settings …
+
+s3:
+  bucketName: lucid-bucket-1
+  # other S3 properties …
+
+job:
+  schedule-time: "19:30"     # CronJob fires at 19:30 UTC
+  schedule-zone: "UTC"       # interpret times in UTC (or specify "Asia/Kolkata")
+  date-pattern: "yyyyMMdd"   # match SQL condition and S3 folder naming
+
+
+
+
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: datalake-feed
+spec:
+  schedule: "30 19 * * *"    # 19:30 every day in UTC
+  timeZone: "Etc/UTC"        # ensure the controller interprets schedule in UTC
+  concurrencyPolicy: Forbid  # skip new runs if previous run is still active
+  startingDeadlineSeconds: 86400  # allow catch-up runs up to one day late
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 4        # retry a failed run up to 4 times:contentReference[oaicite:0]{index=0}
+      template:
+        spec:
+          restartPolicy: OnFailure  # restart container if it exits with error:contentReference[oaicite:1]{index=1}
+          containers:
+          - name: datalake-feed
+            image: <your-image>
+            env:
+              - name: S3_BUCKET_NAME
+                valueFrom:
+                  secretKeyRef:
+                    name: s3-secret
+                    key: bucketName
+              # other secrets and environment vars
