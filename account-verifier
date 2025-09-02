@@ -1,0 +1,112 @@
+
+Perfect! Below is everything you need to:
+
+
+---
+
+✅ 1. Liquibase Changelog File (XML format)
+
+Save this as:
+📄 src/main/resources/db/changelog/changeset-create-api-transaction-log.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+          http://www.liquibase.org/xml/ns/dbchangelog
+          http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="create-api-transaction-log" author="manish">
+        <createTable tableName="api_transaction_log">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="ifsc_code" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_number" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_time" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="response_payload" type="TEXT"/>
+            <column name="response_status" type="VARCHAR(50)"/>
+            <column name="response_time" type="TIMESTAMP"/>
+            <column name="error_message" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createIndex tableName="api_transaction_log" indexName="idx_ifsc_account">
+            <column name="ifsc_code"/>
+            <column name="account_number"/>
+        </createIndex>
+
+        <createIndex tableName="api_transaction_log" indexName="idx_response_status">
+            <column name="response_status"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+
+
+---
+
+✅ 2. Master Changelog File
+
+If you're using a master changelog, add this file to it:
+
+📄 src/main/resources/db/changelog/db.changelog-master.xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <include file="db/changelog/changeset-create-api-transaction-log.xml"/>
+</databaseChangeLog>
+
+
+---
+
+✅ 3. application.yml Configuration for Liquibase + Postgres
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/your_db
+    username: your_user
+    password: your_password
+    driver-class-name: org.postgresql.Driver
+
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.xml
+
+  jpa:
+    hibernate:
+      ddl-auto: none  # Liquibase manages schema
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+
+---
+
+🧪 To Verify:
+
+Run your app, and Liquibase will automatically create the table and indexes.
+
+> ✅ Make sure PostgreSQL is running and accessible
+✅ Schema should be empty or handle changelog history via DATABASECHANGELOG and DATABASECHANGELOGLOCK
+
+
+
+
+---
+
+
