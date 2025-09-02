@@ -110,3 +110,143 @@ Run your app, and Liquibase will automatically create the table and indexes.
 ---
 
 
+
+
+
+@Entity
+@Table(name = "api_transaction_log")
+public class ApiTransactionLog {
+
+    @Id
+    @Column(columnDefinition = "UUID")
+    private UUID id;
+
+    private String ifscCode;
+
+    private String accountNumber;
+
+    private LocalDateTime requestTime;
+
+    @Lob
+    private String responsePayload;
+
+    private String responseStatus;
+
+    private LocalDateTime responseTime;
+
+    @Lob
+    private String errorMessage;
+
+    private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
+
+    // Getters, setters, constructors omitted for brevity
+}
+
+
+
+Certainly! Here's a visual representation of the api_transaction_log table with sample data for both a successful case and a failure case:
+
+
+---
+
+📊 Table: api_transaction_log
+
+id (UUID)	ifsc_code	account_number	request_time	response_payload	response_status	response_time	error_message	created_at	updated_at
+
+d1a3...c8e7	ABC0001234	1234567890	2025-06-23 10:05:12	{"accountHolderName":"John Doe"}	SUCCESS	2025-06-23 10:05:13	NULL	2025-06-23 10:05:12	2025-06-23 10:05:13
+f9b2...b7ad	ABC0001234	9999999999	2025-06-23 10:06:48	NULL	FAILED	2025-06-23 10:06:48	Account not found or closed	2025-06-23 10:06:48	2025-06-23 10:06:48
+
+
+
+---
+
+🧠 Explanation:
+
+✅ Both rows use a unique UUID as a primary key.
+
+🟢 First row shows a successful response: John Doe was returned.
+
+🔴 Second row shows a failure: the account doesn’t exist, and the error is logged in error_message.
+
+🕓 request_time and response_time track the full request duration.
+
+
+
+---
+
+Would you like this rendered as a styled HTML table (e.g., for reporting or admin portal)?
+
+
+
+@Service
+public class AccountLookupService {
+
+    @Autowired
+    private ApiTransactionLogRepository repository;
+
+    public String lookupAccount(String ifsc, String accountNumber) {
+        UUID txnId = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+
+        // Step 1: Log the request
+        logTransaction(txnId, ifsc, accountNumber, now, null, null, null);
+
+        String accountHolderName = null;
+        String status = null;
+        String error = null;
+        String responsePayload = null;
+
+        try {
+            // Simulated business logic
+            if ("1234567890".equals(accountNumber) && "ABC0001234".equalsIgnoreCase(ifsc)) {
+                accountHolderName = "John Doe";
+                status = "SUCCESS";
+                responsePayload = "{\"accountHolderName\":\"" + accountHolderName + "\"}";
+            } else {
+                status = "FAILED";
+                error = "Account not found or closed";
+            }
+
+            // Step 2: Log the response
+            logTransaction(txnId, null, null, null, status, responsePayload, error);
+
+            return accountHolderName != null ? accountHolderName : error;
+
+        } catch (Exception ex) {
+            // Step 3: Log unexpected error
+            logTransaction(txnId, null, null, null, "ERROR", null, "Unexpected error: " + ex.getMessage());
+            return "Internal Error Occurred";
+        }
+    }
+
+    private void logTransaction(UUID id,
+                                String ifsc,
+                                String accountNumber,
+                                LocalDateTime requestTime,
+                                String responseStatus,
+                                String responsePayload,
+                                String errorMessage) {
+
+        Optional<ApiTransactionLog> optionalLog = repository.findById(id);
+        ApiTransactionLog log = optionalLog.orElse(new ApiTransactionLog());
+        LocalDateTime now = LocalDateTime.now();
+
+        log.setId(id);
+        if (ifsc != null) log.setIfscCode(ifsc);
+        if (accountNumber != null) log.setAccountNumber(accountNumber);
+        if (requestTime != null) log.setRequestTime(requestTime);
+        if (log.getCreatedAt() == null) log.setCreatedAt(now);
+
+        if (responseStatus != null) {
+            log.setResponseStatus(responseStatus);
+            log.setResponseTime(now);
+        }
+        if (responsePayload != null) log.setResponsePayload(responsePayload);
+        if (errorMessage != null) log.setErrorMessage(errorMessage);
+
+        log.setUpdatedAt(now);
+        repository.save(log);
+    }
+}
