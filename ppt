@@ -1,0 +1,5 @@
+Intro - 
+
+We have a main UI application Paymento, and it works alongside six services—like Tomcat, senders, receivers, a report scheduler, and so on — and They all collectively behave like one application.
+OK, So Whenever a NEFT or RTGS payment arrives from Transact, the backend service processes it and passes it on to downstream system which is SFMS which is a RBI interface system. At the same time, it updates the UI so that the payment status is always current. 
+In other words, All these services together work as one application and stays in sync.
