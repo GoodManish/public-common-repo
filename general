@@ -1,0 +1,146 @@
+Slide 1 – Agenda
+	•	This session covers day-to-day operational aspects of SFMS and Paymento.
+	•	First, we’ll look at morning health checks to ensure the system is ready before business hours.
+	•	Then we’ll discuss how to handle service failures and troubleshooting.
+	•	Finally, we’ll cover vendor support and escalation process.
+	•	The idea is to ensure smooth RTGS/NEFT operations with minimal downtime.
+
+⸻
+
+Slide 2 – Quick Brief on SFMS / Paymento
+	•	Paymento is the UI-facing application, also known as MumPaymento.
+	•	It communicates directly with RBI for NEFT and RTGS settlements.
+	•	It also helps Transact by formatting and translating messages.
+	•	SFMS is a backend processing system for NEFT/RTGS.
+	•	SFMS acts as the intermediary between Transact and Paymento, handling actual processing.
+
+⸻
+
+Slide 3 – Morning Health Checks
+	•	SFMS has 8 backend services, out of which 6 are BAU-critical.
+	•	All 6 critical services must be in START mode before operations begin.
+	•	Morning checks are mandatory to avoid payment delays or rejections.
+	•	We use the SFMS Admin UI to verify service status.
+	•	If all services are running and logs are clean, the system is considered healthy.
+
+⸻
+
+Slide 4 – Tomcat
+	•	Tomcat is the application server for all SFMS services.
+	•	All other SFMS services are dependent on Tomcat.
+	•	This makes Tomcat the most critical backend component.
+	•	If Tomcat is down, most SFMS services will fail.
+	•	That’s why Tomcat issues are always handled first.
+
+⸻
+
+Slide 5 – Report Scheduler
+	•	Report Scheduler generates scheduled NEFT/RTGS operational reports.
+	•	It routes report files via FRS between SFMS and Paymento.
+	•	These reports are mainly used by SFMS back-office teams.
+	•	If this service is down, no operational reports are generated.
+	•	Payment processing may continue, but visibility and reconciliation are impacted.
+
+⸻
+
+Slide 6 – Sender Process
+	•	Sender Process handles outward NEFT/RTGS payment messages.
+	•	It sends transactions initiated in Transact to RBI.
+	•	The flow is Temenos → SFMS → RBI.
+	•	This service is critical for sending customer payments out.
+	•	If Sender is down, outward payments will get stuck.
+
+⸻
+
+Slide 7 – Receiver Process
+	•	Receiver Process handles inward acknowledgements from RBI.
+	•	The flow is RBI → SFMS → Temenos.
+	•	These acknowledgements are required for final status updates.
+	•	It supports reconciliation and posting confirmations in CBS.
+	•	If Receiver is down, payments may be sent but statuses won’t update.
+
+⸻
+
+Slide 8 – CBS Receiver
+	•	CBS Receiver accepts requests from core banking and upstream systems.
+	•	This includes systems like Temenos, LoanIQ, IMEX, Expense, GC, etc.
+	•	It acts as the entry point into SFMS from banking applications.
+	•	Overall flow becomes:
+IMEX/Transact/LoanIQ → Paymento → CBS Receiver → SFMS → Sender → RBI
+	•	If CBS Receiver fails, new payment requests won’t enter SFMS.
+
+⸻
+
+Slide 9 – Event Process
+	•	Event Process logs all inward and outward transaction activities.
+	•	It generates application and audit logs for compliance.
+	•	Logs are written to the D drive on the server.
+	•	Log files are created hourly.
+	•	These logs are crucial for audit, investigation, and troubleshooting.
+
+⸻
+
+Slide 10 – What If One or More Services Are Down?
+	•	First step is to identify which service is impacted.
+	•	Always check whether the issue is isolated or Tomcat-related.
+	•	Avoid restarting services blindly.
+	•	Understand the dependency chain before taking action.
+	•	Proper sequence prevents cascading failures.
+
+⸻
+
+Slide 11 – Services Failure Troubleshooting
+	•	Always start by checking Tomcat logs for errors.
+	•	If Tomcat is down, dependent services will also be impacted.
+	•	Do not restart dependent services until Tomcat is stable.
+	•	Restart priority is Tomcat first, then others.
+	•	Sequence matters—Tomcat first to start, last to stop.
+
+⸻
+
+Slide 12 – How to Clean Restart All Services (Step-0)
+	•	Before restarting anything, check IBM MQ queue depth.
+	•	Normal queue depth is around 5–6 messages in transit.
+	•	If depth exceeds 15, SFMS may not be consuming messages.
+	•	In such cases, pause and inform the vendor team.
+	•	Restarting without checking queues can cause message loss or duplication.
+
+⸻
+
+Slide 13 – Clean Restart – Step-1 (Cache Server)
+	•	Navigate to the SFMS_APP_START folder on the RDP machine.
+	•	Run 1-start-ehcache-server.bat first.
+	•	This ensures prerequisite components like DB and MQ are reachable.
+	•	It validates that all required dependencies are up and running.
+	•	Only after this step should SFMS be started.
+
+⸻
+
+Slide 14 – Clean Restart – Step-2 (SFMS Services)
+	•	Run SFMSBankProcessv1.1.bat to start SFMS.
+	•	Enter the password from Password.txt when prompted.
+	•	Start all 5 services using “11111111” as instructed.
+	•	Ensure all services move to START mode gracefully.
+	•	Finally, verify logs are free of errors or stack traces.
+
+⸻
+
+Slide 15 – Paymento Troubleshooting
+	•	Paymento restart is simple and independent.
+	•	Go to the PAYMENTO_STARTUP folder on the desktop.
+	•	Run shutdown.bat to stop Paymento services.
+	•	Then run startup.bat to bring Paymento back up.
+	•	Always verify connectivity with SFMS after restart.
+
+⸻
+
+Slide 16 – Vendor Support
+	•	Vendor support is provided by Logic Systech Pvt Ltd.
+	•	We expect 24×7 support for SFMS and Paymento.
+	•	First contact is always mobile call, followed by an email.
+	•	Vendor creates a bridge call and stays until resolution.
+	•	Escalate only after internal checks are completed.
+
+⸻
+
+ 
