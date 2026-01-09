@@ -1,24 +1,25 @@
+Hel0-ALL
+This KT Session is in continuation on SFMS & Paymento. Today we'll Cover daily operational aspects of SFMS & PAYMENTO application.
+
 Slide 1 – Agenda
-	•	This session covers day-to-day operational aspects of SFMS and Paymento.
-	•	First, we’ll look at morning health checks to ensure the system is ready before business hours.
-	•	Then we’ll discuss how to handle service failures and troubleshooting.
-	•	Finally, we’ll cover vendor support and escalation process.
-	•	The idea is to ensure smooth RTGS/NEFT operations with minimal downtime.
+	•	First, we’ll look at morning health checks - to make sure the systems are ready before business hours begin.
+	•	Then we’ll discuss how to handle service failures & troubleshooting.
+	•	And then, we’ll cover vendor support & escalation process.
 
 ⸻
 
 Slide 2 – Quick Brief on SFMS / Paymento
 	•	Paymento is the UI-facing application, also known as MumPaymento.
-	•	It communicates directly with RBI for NEFT and RTGS settlements.
-	•	It also helps Transact by formatting and translating messages.
-	•	SFMS is a backend processing system for NEFT/RTGS.
-	•	SFMS acts as the intermediary between Transact and Paymento, handling actual processing.
+	•	It communicates directly with RBI, for NEFT/RTGS settlements.
+	•	It also helps Transact, by formatting & translating messages.
+	•	SFMS is a collection of services which runs in background
+	•	SFMS services handles actual processing in the backend.
 
 ⸻
 
 Slide 3 – Morning Health Checks
 	•	SFMS has 8 backend services, out of which 6 are BAU-critical.
-	•	All 6 critical services must be in START mode before operations begin.
+	•	All 6 critical services must be in START mode, before operations begin.
 	•	Morning checks are mandatory to avoid payment delays or rejections.
 	•	We use the SFMS Admin UI to verify service status.
 	•	If all services are running and logs are clean, the system is considered healthy.
@@ -35,17 +36,16 @@ Slide 4 – Tomcat
 ⸻
 
 Slide 5 – Report Scheduler
-	•	Report Scheduler generates scheduled NEFT/RTGS operational reports.
+	•	Report Scheduler generates NEFT/RTGS operational reports.
 	•	It routes report files via FRS between SFMS and Paymento.
 	•	These reports are mainly used by SFMS back-office teams.
 	•	If this service is down, no operational reports are generated.
-	•	Payment processing may continue, but visibility and reconciliation are impacted.
 
 ⸻
 
 Slide 6 – Sender Process
 	•	Sender Process handles outward NEFT/RTGS payment messages.
-	•	It sends transactions initiated in Transact to RBI.
+	•	It sends transactions (initiated in Transact) to RBI.
 	•	The flow is Temenos → SFMS → RBI.
 	•	This service is critical for sending customer payments out.
 	•	If Sender is down, outward payments will get stuck.
@@ -65,18 +65,16 @@ Slide 8 – CBS Receiver
 	•	CBS Receiver accepts requests from core banking and upstream systems.
 	•	This includes systems like Temenos, LoanIQ, IMEX, Expense, GC, etc.
 	•	It acts as the entry point into SFMS from banking applications.
-	•	Overall flow becomes:
-IMEX/Transact/LoanIQ → Paymento → CBS Receiver → SFMS → Sender → RBI
+	•	Overall flow becomes: IMEX/Transact/LoanIQ → Paymento → CBS Receiver → SFMS → Sender → RBI
 	•	If CBS Receiver fails, new payment requests won’t enter SFMS.
 
 ⸻
 
 Slide 9 – Event Process
-	•	Event Process logs all inward and outward transaction activities.
+	•	Event Process logs all inward & outward transaction activities.
 	•	It generates application and audit logs for compliance.
 	•	Logs are written to the D drive on the server.
 	•	Log files are created hourly.
-	•	These logs are crucial for audit, investigation, and troubleshooting.
 
 ⸻
 
