@@ -15,3 +15,25 @@ spring:
   output:
     ansi:
       enabled: ALWAYS
+
+
+<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+<configuration>
+
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProperty name="springApplicationName" source="spring.application.name"/>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>
+                %clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint}
+                %clr(%5p)
+                %clr([%thread]){faint}
+                %clr(%logger{10}){cyan}
+                %clr([%file:%line]){yellow}
+                %msg%n
+            </pattern>
+        </encoder>
+    </appender>
