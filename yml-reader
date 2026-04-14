@@ -1,1 +1,549 @@
+Let’s put everything together as a clean, runnable structure.
+
+I’ll give you:
+
+✅ Sample YAML (moderately complex, good for DTO design)
+✅ Complete Java structure (all classes)
+✅ YAML → JSON conversion
+✅ Jenkins pipeline (secure + clean)
+✅ Folder structure (so you don’t get lost)
+
+
+
+✅ 1. Sample YAML (from GitHub repo)
+
+Path in repo:
+
+configs/orders/order-config.yml
+
+service:
+  name: order-service
+  version: v2
+  owner: payments-team
+
+deployment:
+  replicas: 3
+  region: ap-south-1
+  autoscaling:
+    enabled: true
+    min: 2
+    max: 10
+
+database:
+  primary:
+    url: jdbc:postgresql://prod-db:5432/orders
+    username: appuser
+    poolSize: 15
+  replica:
+    enabled: true
+    url: jdbc:postgresql://replica-db:5432/orders
+
+messaging:
+  kafka:
+    brokers:
+      - kafka1:9092
+      - kafka2:9092
+    topic: order-events
+    retries: 5
+
+features:
+  auditEnabled: true
+  retryEnabled: false
+  experimental:
+    newFlow: true
+
+-------------------------------
+
+✅ 2. Project Structure
+src/main/java/com/example/configloader/
+
+ ├── Application.java
+ ├── runner/
+ │     └── JobRunner.java
+ ├── github/
+ │     └── GitHubService.java
+ ├── parser/
+ │     ├── YamlParser.java
+ │     └── JsonWriter.java
+ ├── service/
+ │     └── ConfigLoaderService.java
+ └── model/
+       └── OrderConfig.java
+
+---------------------------------
+
+✅ 3. Maven Dependencies
+<dependencies>
+
+    <!-- Spring Boot -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+
+    <!-- GitHub API -->
+    <dependency>
+        <groupId>org.kohsuke</groupId>
+        <artifactId>github-api</artifactId>
+        <version>1.325</version>
+    </dependency>
+
+    <!-- YAML + JSON -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.dataformat</groupId>
+        <artifactId>jackson-dataformat-yaml</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+
+</dependencies>
+
+--------------------
+
+✅ 4. Main Application
+
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+-----------------------
+✅ 5. DTO (POJO)
+
+package com.example.configloader.model;
+
+import lombok.Data;
+import java.util.List;
+
+@Data
+public class OrderConfig {
+
+    private Service service;
+    private Deployment deployment;
+    private Database database;
+    private Messaging messaging;
+    private Features features;
+
+    @Data
+    public static class Service {
+        private String name;
+        private String version;
+        private String owner;
+    }
+
+    @Data
+    public static class Deployment {
+        private int replicas;
+        private String region;
+        private Autoscaling autoscaling;
+
+        @Data
+        public static class Autoscaling {
+            private boolean enabled;
+            private int min;
+            private int max;
+        }
+    }
+
+    @Data
+    public static class Database {
+        private Primary primary;
+        private Replica replica;
+
+        @Data
+        public static class Primary {
+            private String url;
+            private String username;
+            private int poolSize;
+        }
+
+        @Data
+        public static class Replica {
+            private boolean enabled;
+            private String url;
+        }
+    }
+
+    @Data
+    public static class Messaging {
+        private Kafka kafka;
+
+        @Data
+        public static class Kafka {
+            private List<String> brokers;
+            private String topic;
+            private int retries;
+        }
+    }
+
+    @Data
+    public static class Features {
+        private boolean auditEnabled;
+        private boolean retryEnabled;
+        private Experimental experimental;
+
+        @Data
+        public static class Experimental {
+            private boolean newFlow;
+        }
+    }
+}
+-------------------------------
+
+✅ 6. GitHub Service
+
+package com.example.configloader.github;
+
+import org.kohsuke.github.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
+
+@Service
+public class GitHubService {
+
+    @Value("${GITHUB_TOKEN}")
+    private String token;
+
+    public InputStream fetchFile(String repo, String branch, String path) throws Exception {
+
+        GitHub github = new GitHubBuilder()
+                .withOAuthToken(token)
+                .build();
+
+        GHRepository repository = github.getRepository(repo);
+
+        GHContent content = repository.getFileContent(path, branch);
+
+        return content.read();
+    }
+}
+--------------------
+✅ 7. YAML Parser
+package com.example.configloader.parser;
+
+import com.example.configloader.model.OrderConfig;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
+
+@Service
+public class YamlParser {
+
+    private final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+
+    public OrderConfig parse(InputStream inputStream) throws Exception {
+        return mapper.readValue(inputStream, OrderConfig.class);
+    }
+}
+--------------------------
+✅ 8. JSON Writer
+package com.example.configloader.parser;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
+
+import java.io.File;
+
+@Service
+public class JsonWriter {
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    public void write(Object obj, String fileName) throws Exception {
+        mapper.writerWithDefaultPrettyPrinter()
+                .writeValue(new File(fileName), obj);
+    }
+}
+---------------------
+✅ 9. Config Loader Service
+package com.example.configloader.service;
+
+import com.example.configloader.github.GitHubService;
+import com.example.configloader.model.OrderConfig;
+import com.example.configloader.parser.JsonWriter;
+import com.example.configloader.parser.YamlParser;
+import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
+
+@Service
+public class ConfigLoaderService {
+
+    private final GitHubService gitHubService;
+    private final YamlParser yamlParser;
+    private final JsonWriter jsonWriter;
+
+    public ConfigLoaderService(GitHubService gitHubService,
+                               YamlParser yamlParser,
+                               JsonWriter jsonWriter) {
+        this.gitHubService = gitHubService;
+        this.yamlParser = yamlParser;
+        this.jsonWriter = jsonWriter;
+    }
+
+    public void process(String branch) throws Exception {
+
+        String repo = "your-org/order-config-repo";
+        String path = "configs/orders/order-config.yml";
+
+        InputStream is = gitHubService.fetchFile(repo, branch, path);
+
+        OrderConfig config = yamlParser.parse(is);
+
+        jsonWriter.write(config, "output.json");
+
+        System.out.println("Processed and written JSON successfully");
+    }
+}
+-----------------------------
+✅ 10. Runner (Entry Point)
+package com.example.configloader.runner;
+
+import com.example.configloader.service.ConfigLoaderService;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.stereotype.Component;
+
+@Component
+public class JobRunner implements CommandLineRunner {
+
+    private final ConfigLoaderService service;
+
+    public JobRunner(ConfigLoaderService service) {
+        this.service = service;
+    }
+
+    @Override
+    public void run(String... args) throws Exception {
+
+        String branch = "main";
+
+        for (String arg : args) {
+            if (arg.startsWith("--branch=")) {
+                branch = arg.split("=")[1];
+            }
+        }
+
+        service.process(branch);
+    }
+}
+--------------------------------
+✅ 11. Jenkins Pipeline
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'BRANCH_NAME', defaultValue: 'main', description: 'Git branch')
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('github-token-id')
+    }
+
+    stages {
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Run Job') {
+            steps {
+                sh """
+                java -jar target/app.jar \
+                --branch=${BRANCH_NAME}
+                """
+            }
+        }
+    }
+}
+--------------------
+✅ 12. Output Example (JSON)
+{
+  "service": {
+    "name": "order-service",
+    "version": "v2",
+    "owner": "payments-team"
+  },
+  "deployment": {
+    "replicas": 3,
+    "region": "ap-south-1",
+    "autoscaling": {
+      "enabled": true,
+      "min": 2,
+      "max": 10
+    }
+  }
+}
+
+=======================
+🔥 Production Improvements (You SHOULD add later)
+
+You’re already thinking architect-level, so consider:
+
+✅ Parallel fetch (multi repo)
+✅ Retry (GitHub failures)
+✅ Validation layer (mandatory fields)
+✅ Config diff (branch vs main)
+✅ Cache (avoid repeated fetch)
+============================
+
+
+
+
+✅ Your Requirement (interpreted carefully)
+
+You want something like:
+t24data-{service.name}!HK0022000.json
+
+But note:
+service.name comes from YAML ✅
+HK0022000 → must come from somewhere (YAML / input / constant)
+
+👉 Hardcoding that value is risky.
+👉 Better: either read from YAML OR pass as parameter.
+
+For now, I’ll:
+Use service.name
+Add a configId (can come from YAML or fallback)
+
+✅ Updated YAML (small addition — recommended)
+service:
+  name: order-service
+  version: v2
+  owner: payments-team
+  configId: HK0022000
+
+✅ Updated File #9 (ConfigLoaderService)
+
+Here is the updated version only (clean + production-safe):
+
+package com.example.configloader.service;
+
+import com.example.configloader.github.GitHubService;
+import com.example.configloader.model.OrderConfig;
+import com.example.configloader.parser.JsonWriter;
+import com.example.configloader.parser.YamlParser;
+import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
+
+@Service
+public class ConfigLoaderService {
+
+    private final GitHubService gitHubService;
+    private final YamlParser yamlParser;
+    private final JsonWriter jsonWriter;
+
+    public ConfigLoaderService(GitHubService gitHubService,
+                               YamlParser yamlParser,
+                               JsonWriter jsonWriter) {
+        this.gitHubService = gitHubService;
+        this.yamlParser = yamlParser;
+        this.jsonWriter = jsonWriter;
+    }
+
+    public void process(String branch) throws Exception {
+
+        String repo = "your-org/order-config-repo";
+        String path = "configs/orders/order-config.yml";
+
+        InputStream is = gitHubService.fetchFile(repo, branch, path);
+
+        OrderConfig config = yamlParser.parse(is);
+
+        // 🔹 Generate dynamic filename
+        String fileName = generateFileName(config);
+
+        jsonWriter.write(config, fileName);
+
+        System.out.println("Processed and written JSON: " + fileName);
+    }
+
+    private String generateFileName(OrderConfig config) {
+
+        String serviceName = safe(config.getService().getName());
+        String configId = safe(config.getService().getConfigId());
+
+        return String.format("t24data-%s!%s.json", serviceName, configId);
+    }
+
+    private String safe(String value) {
+        if (value == null || value.isEmpty()) {
+            return "unknown";
+        }
+
+        // Remove unsafe characters for file systems
+        return value.replaceAll("[^a-zA-Z0-9-_]", "_");
+    }
+}
+✅ Update DTO (small change)
+
+Add this field:
+@Data
+public static class Service {
+    private String name;
+    private String version;
+    private String owner;
+    private String configId;   // 👈 NEW
+}
+✅ Output Example
+
+If YAML:
+service:
+  name: order-service
+  configId: HK0022000
+
+👉 Output file:
+t24data-order-service!HK0022000.json
+🔥 Important Design Thought (Don’t skip this)
+
+You have 3 options for 'configId':
+Source	          When to use
+YAML            	Best if config-owned
+Jenkins param	    Best if environment-driven
+Derived (logic)	  Rare, but possible
+
+👉 If coming from Jenkins (even better)
+
+You could do:
+--configId=HK0022000
+
+And update:
+private String generateFileName(OrderConfig config, String configId)
+👉 This decouples config from naming
+
+⚠️ Subtle but Important Issue
+
+If:
+
+multiple YAML files processed
+same service name
+
+👉 File overwrite risk
+
+Solution:
+
+Add timestamp OR UUID
+
+Example:
+
+return String.format("t24data-%s!%s-%d.json",
+        serviceName,
+        configId,
+        System.currentTimeMillis());
 
