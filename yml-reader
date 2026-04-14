@@ -547,3 +547,205 @@ return String.format("t24data-%s!%s-%d.json",
         configId,
         System.currentTimeMillis());
 
+
+
+
+========================================================= With Real Yaml - Code Config Changes  ===============================================================
+Great — this is a real-world YAML, and honestly it’s a bit messy (typical enterprise config 😄).
+So instead of blindly mapping 1:1, I’ll refactor smartly so your code is:
+
+  resilient to missing fields
+  flexible for multiple applications
+  handles dynamic keys like records, currencyMarket, etc.
+
+🔥 First — Understand the Structure (IMPORTANT)
+Your YAML is actually:
+
+entities:
+  - entityId: Korea
+    applications:
+      - application: PP.COMPANY.PROPERTIES
+        records: [ ... ]
+      - application: CURRENCY
+        records: [ ... ]
+
+👉 So this is NOT a single config
+👉 It is: Entity → Applications → Records (dynamic structure)
+
+⚠️ Key Observations (Very Important)
+🔴 1. Mixed Data Types
+Everything is string:
+'maxSize': '10'
+👉 Don’t map to int directly → risk of failure
+
+🔴 2. Weird Keys
+'FXTolerancePercentage*'
+'bicIBANCheck*'
+👉 These will break normal mapping
+
+🔴 3. Different Record Structures per Application
+PP.COMPANY.PROPERTIES → one structure
+CURRENCY → completely different
+
+👉 So:
+❌ Don’t use single DTO for all records
+✅ Use generic + typed mapping
+
+---------------
+✅ Recommended DTO Design (Refactored)
+
+✅ Root Object
+@Data
+public class RootConfig {
+    private List<Entity> entities;
+}
+
+✅ Entity
+@Data
+public class Entity {
+    private String entityId;
+    private List<Application> applications;
+}
+
+✅ Application
+@Data
+public class Application {
+    private String application;
+
+    // flexible → different structures
+    private List<Map<String, Object>> records;
+}
+
+✅ Why Map<String, Object>?
+   Because:
+    Each application has different schema
+    Some keys are invalid Java names
+    Some values are dynamic
+
+👉 This avoids:
+    constant DTO changes
+    parsing failures
+
+✅ YAML Parser (Updated)
+@Service
+public class YamlParser {
+
+    private final ObjectMapper mapper;
+
+    public YamlParser() {
+        this.mapper = new ObjectMapper(new YAMLFactory());
+
+        // important for unknown/dynamic fields
+        this.mapper.configure(
+                DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+                false
+        );
+    }
+
+    public RootConfig parse(InputStream inputStream) throws Exception {
+        return mapper.readValue(inputStream, RootConfig.class);
+    }
+}
+
+
+✅ ConfigLoaderService (UPDATED for your YAML)
+Now we extract meaningful data + generate filename.
+
+@Service
+public class ConfigLoaderService {
+
+    private final GitHubService gitHubService;
+    private final YamlParser yamlParser;
+    private final JsonWriter jsonWriter;
+
+    public ConfigLoaderService(GitHubService gitHubService,
+                               YamlParser yamlParser,
+                               JsonWriter jsonWriter) {
+        this.gitHubService = gitHubService;
+        this.yamlParser = yamlParser;
+        this.jsonWriter = jsonWriter;
+    }
+
+    public void process(String branch) throws Exception {
+
+        String repo = "your-org/order-config-repo";
+        String path = "configs/orders/order-config.yml";
+
+        InputStream is = gitHubService.fetchFile(repo, branch, path);
+
+        RootConfig root = yamlParser.parse(is);
+
+        for (Entity entity : root.getEntities()) {
+
+            String entityId = safe(entity.getEntityId());
+
+            for (Application app : entity.getApplications()) {
+
+                String appName = safe(app.getApplication());
+
+                int index = 1;
+
+                for (Map<String, Object> record : app.getRecords()) {
+
+                    String fileName = String.format(
+                            "t24data-%s!%s-%s-%d.json",
+                            entityId,
+                            appName,
+                            extractId(record),
+                            index++
+                    );
+
+                    jsonWriter.write(record, fileName);
+                }
+            }
+        }
+    }
+
+    private String extractId(Map<String, Object> record) {
+        Object id = record.get("id");
+        if (id == null) {
+            id = record.get("ID");
+        }
+        return safe(String.valueOf(id));
+    }
+
+    private String safe(String value) {
+        if (value == null) return "unknown";
+        return value.replaceAll("[^a-zA-Z0-9-_]", "_");
+    }
+}
+
+✅ Output File Examples (From Your YAML)
+For COMPANY
+  t24data-Korea!PP_COMPANY_PROPERTIES-KRW_20211230-1.json
+
+For CURRENCY EUR
+  t24data-Korea!CURRENCY-EUR-1.json
+
+For CURRENCY USD
+  t24data-Korea!CURRENCY-USD-2.json
+
+🔥 Why this design is CORRECT (Architect-level reasoning)
+✅ Handles:
+    Multiple entities
+    Multiple applications
+    Multiple record types
+    Unknown fields
+    Invalid YAML keys (*)
+
+❌ What you should NOT do
+    class CurrencyDTO {}
+    class CompanyDTO {}
+
+👉 This will explode when schema changes
+⚠️ One More Important Issue (Hidden Bug)
+
+In your YAML:
+'buyRate': '_'
+
+👉 This is NOT a number
+👉 So:
+
+Mapping to int/double → ❌ crash
+Using Map<String,Object> → ✅ safe
+
