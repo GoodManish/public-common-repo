@@ -1,0 +1,570 @@
+Nice — this is a much cleaner and more realistic flow 👍
+You’ve essentially shifted from reading config from GitHub → to a template-driven generator + Git publisher.
+
+Let’s refactor properly.
+
+🔥 Final Architecture (after your update)
+App (running in Jenkins)
+   ↓
+Read YAML template (LOCAL file in repo)
+   ↓
+Parse → Generate JSON files
+   ↓
+Clone target repo (Transact-Entity) on SAME branch
+   ↓
+Write JSON files into repo
+   ↓
+Commit + Push back to GitHub
+
+👉 No GitHub API needed anymore ❌
+👉 Use Git (JGit) instead ✅
+
+✅ 1. Updated Dependencies
+<dependencies>
+    <!-- Spring Boot -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+
+    <!-- YAML -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.dataformat</groupId>
+        <artifactId>jackson-dataformat-yaml</artifactId>
+    </dependency>
+
+    <!-- JSON -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+
+    <!-- JGit -->
+    <dependency>
+        <groupId>org.eclipse.jgit</groupId>
+        <artifactId>org.eclipse.jgit</artifactId>
+        <version>6.8.0.202311291450-r</version>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+</dependencies>
+
+✅ 2. YAML Location (VERY IMPORTANT CHANGE)
+
+Place YAML inside app:
+src/main/resources/template/order-config.yml
+
+✅ 3. Model Classes (same as before)
+✔ No change — still dynamic
+
+RootConfig.java
+@Data
+public class RootConfig {
+    private List<Entity> entities;
+}
+
+Entity.java
+@Data
+public class Entity {
+    private String entityId;
+    private List<Application> applications;
+}
+
+Application.java
+@Data
+public class Application {
+    private String application;
+    private List<Map<String, Object>> records;
+}
+
+✅ 4. YAML Reader (LOCAL FILE now)
+package com.example.configloader.parser;
+
+import com.example.configloader.model.RootConfig;
+import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
+
+@Service
+public class YamlParser {
+
+    private final ObjectMapper mapper;
+
+    public YamlParser() {
+        this.mapper = new ObjectMapper(new YAMLFactory());
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    }
+
+    public RootConfig parse() throws Exception {
+
+        InputStream is = getClass()
+                .getClassLoader()
+                .getResourceAsStream("template/order-config.yml");
+
+        if (is == null) {
+            throw new RuntimeException("YAML template not found!");
+        }
+
+        return mapper.readValue(is, RootConfig.class);
+    }
+}
+
+
+✅ 5. JSON Writer (UPDATED → writes to directory)
+package com.example.configloader.parser;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
+
+import java.io.File;
+
+@Service
+public class JsonWriter {
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    public void write(Object obj, String directory, String fileName) throws Exception {
+
+        File dir = new File(directory);
+        if (!dir.exists()) dir.mkdirs();
+
+        File file = new File(dir, fileName);
+
+        mapper.writerWithDefaultPrettyPrinter()
+                .writeValue(file, obj);
+    }
+}
+
+
+✅ 6. Git Service (NEW — CORE CHANGE)
+package com.example.configloader.github;
+
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.File;
+
+@Service
+public class GitService {
+
+    @Value("${GITHUB_TOKEN}")
+    private String token;
+
+    private static final String USER = "x-access-token";
+
+    public File cloneRepo(String repoUrl, String branch) throws Exception {
+
+        File dir = new File("target/clone-repo");
+
+        if (dir.exists()) {
+            deleteDir(dir);
+        }
+
+        Git.cloneRepository()
+                .setURI(repoUrl)
+                .setBranch(branch)
+                .setDirectory(dir)
+                .setCredentialsProvider(new UsernamePasswordCredentialsProvider(USER, token))
+                .call();
+
+        return dir;
+    }
+
+    public void commitAndPush(File repoDir, String message) throws Exception {
+
+        Git git = Git.open(repoDir);
+
+        git.add().addFilepattern(".").call();
+
+        git.commit()
+                .setMessage(message)
+                .call();
+
+        git.push()
+                .setCredentialsProvider(new UsernamePasswordCredentialsProvider(USER, token))
+                .call();
+    }
+
+    private void deleteDir(File file) {
+        if (file.isDirectory()) {
+            for (File f : file.listFiles()) {
+                deleteDir(f);
+            }
+        }
+        file.delete();
+    }
+}
+
+
+✅ 7. ConfigLoaderService (FULLY UPDATED FLOW)
+package com.example.configloader.service;
+
+import com.example.configloader.github.GitService;
+import com.example.configloader.model.*;
+import com.example.configloader.parser.JsonWriter;
+import com.example.configloader.parser.YamlParser;
+import org.springframework.stereotype.Service;
+
+import java.io.File;
+import java.util.Map;
+
+@Service
+public class ConfigLoaderService {
+
+    private final YamlParser yamlParser;
+    private final JsonWriter jsonWriter;
+    private final GitService gitService;
+
+    public ConfigLoaderService(YamlParser yamlParser,
+                               JsonWriter jsonWriter,
+                               GitService gitService) {
+        this.yamlParser = yamlParser;
+        this.jsonWriter = jsonWriter;
+        this.gitService = gitService;
+    }
+
+    public void process(String branch) throws Exception {
+
+        // 1. Parse local YAML
+        RootConfig root = yamlParser.parse();
+
+        // 2. Clone target repo
+        String repoUrl = "https://github.com/your-org/Transact-Entity.git";
+        File repoDir = gitService.cloneRepo(repoUrl, branch);
+
+        String outputDir = repoDir.getAbsolutePath() + "/generated";
+
+        // 3. Generate JSON files
+        for (Entity entity : root.getEntities()) {
+
+            String entityId = safe(entity.getEntityId());
+
+            for (Application app : entity.getApplications()) {
+
+                String appName = safe(app.getApplication());
+
+                int index = 1;
+
+                for (Map<String, Object> record : app.getRecords()) {
+
+                    String recordId = extractId(record);
+
+                    String fileName = String.format(
+                            "t24data-%s!%s-%s-%d.json",
+                            entityId,
+                            appName,
+                            recordId,
+                            index++
+                    );
+
+                    jsonWriter.write(record, outputDir, fileName);
+                }
+            }
+        }
+
+        // 4. Commit & Push
+        gitService.commitAndPush(repoDir, "Auto-generated JSON files");
+    }
+
+    private String extractId(Map<String, Object> record) {
+        Object id = record.get("id");
+        if (id == null) id = record.get("ID");
+        return safe(id != null ? id.toString() : "unknown");
+    }
+
+    private String safe(String value) {
+        if (value == null) return "unknown";
+        return value.replaceAll("[^a-zA-Z0-9-_]", "_");
+    }
+}
+
+
+✅ 8. Runner (UNCHANGED)
+@Component
+public class JobRunner implements CommandLineRunner {
+
+    private final ConfigLoaderService service;
+
+    public JobRunner(ConfigLoaderService service) {
+        this.service = service;
+    }
+
+    @Override
+    public void run(String... args) throws Exception {
+
+        String branch = "main";
+
+        for (String arg : args) {
+            if (arg.startsWith("--branch=")) {
+                branch = arg.split("=")[1];
+            }
+        }
+
+        service.process(branch);
+    }
+}
+
+
+✅ 9. Jenkins Pipeline (minor tweak only)
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'BRANCH_NAME', defaultValue: 'main')
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('github-token-id')
+    }
+
+    stages {
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Run') {
+            steps {
+                sh """
+                java -jar target/app.jar \
+                --branch=${BRANCH_NAME}
+                """
+            }
+        }
+    }
+}
+
+
+🔥 Important Design Notes (Don’t skip)
+✅ Why JGit now?
+  You need write access (commit/push)
+  GitHub API is not suitable for bulk file generation
+  
+⚠️ Critical Edge Cases
+  Branch does not exist
+  JGit clone will fail
+
+👉 Option: create branch if missing (can add later)
+
+Concurrent Jenkins jobs
+  Same repo, same branch → conflicts
+Large number of files
+  Git performance may degrade
+Commit spam
+  You may want batching / commit message control
+
+  
+🚀 If you want next level
+I can help you build:
+✅ Auto-create branch if not exists
+✅ Parallel JSON generation
+✅ Commit only if changes detected (very important)
+✅ Push to subfolders per entity/application
+
+----------------------------------------------------------------------------------------
+
+
+Great — let’s make this crystal clear end-to-end, using your exact flow and a concrete example. I’ll also answer the JGit question properly (not hand-wavy).
+
+🚀 1. End-to-End Flow (Your Final System)
+🧩 Step-by-step (real pipeline view)
+Jenkins Job (feature-branch = feature-KR)
+   ↓
+Spring Boot App starts
+   ↓
+Reads LOCAL YAML template
+   ↓
+Parses → loops → generates JSON files
+   ↓
+Clones target repo (Transact-Entity) on SAME branch
+   ↓
+Writes JSON files into repo
+   ↓
+Git commit + push
+   ↓
+Repo updated with generated JSON
+
+
+🧪 2. Sample Input (Your YAML – simplified)
+Let’s take a small realistic slice from your YAML:
+
+entities:
+  - entityId: Korea
+    applications:
+      - application: CURRENCY
+        records:
+          - id: EUR
+            ccyName: Euro
+          - id: USD
+            ccyName: US Dollar
+
+⚙️ 3. Jenkins Execution
+Input parameter:
+  BRANCH_NAME = feature-KR
+Jenkins runs:
+  java -jar app.jar --branch=feature-KR
+
+  
+🧠 4. What Your App Does (Internally)
+🔹 Step 1: Read YAML
+RootConfig root = yamlParser.parse();
+
+👉 Parsed object:
+{
+  "entities": [
+    {
+      "entityId": "Korea",
+      "applications": [...]
+    }
+  ]
+}
+
+🔹 Step 2: Clone Target Repo
+  File repoDir = gitService.cloneRepo(repoUrl, "feature-KR");
+
+👉 Local folder created:
+    target/clone-repo/
+
+👉 Branch checked out: feature-KR
+
+
+🔹 Step 3: Generate JSON Files
+  Loop:
+  Entity → Application → Records
+
+🧾 Record 1:
+  id: EUR
+  ccyName: Euro
+
+👉 Generated filename:
+t24data-Korea!CURRENCY-EUR-1.json
+
+👉 Generated JSON:
+{
+  "id": "EUR",
+  "ccyName": "Euro"
+}
+🧾 Record 2:
+id: USD
+ccyName: US Dollar
+
+👉 File:
+
+t24data-Korea!CURRENCY-USD-2.json
+📁 Files created in repo:
+target/clone-repo/generated/
+
+ ├── t24data-Korea!CURRENCY-EUR-1.json
+ ├── t24data-Korea!CURRENCY-USD-2.json
+🔹 Step 4: Commit + Push
+gitService.commitAndPush(repoDir, "Auto-generated JSON files");
+
+👉 Result in GitHub repo (Transact-Entity):
+
+branch: feature-KR
+
+generated/
+ ├── t24data-Korea!CURRENCY-EUR-1.json
+ ├── t24data-Korea!CURRENCY-USD-2.json
+📌 5. What Happens If You Run Again?
+
+👉 Important behavior:
+
+Files overwritten (same names)
+New commit created
+History maintained
+⚠️ 6. Real-world Edge Cases (Very Important)
+🔴 Case 1: Branch doesn’t exist
+Clone fails
+
+👉 Solution:
+
+Create branch programmatically (can add later)
+🔴 Case 2: No changes
+Git still commits → ❌ bad practice
+
+👉 Better:
+
+Check git status before commit
+🔴 Case 3: Large YAML
+Many JSON files
+Git push may slow
+🧠 7. JGit — Honest Answer (Not marketing)
+✅ What is JGit?
+Java implementation of Git
+Maintained by Eclipse Foundation
+Used by Eclipse IDE internally
+✅ License
+Eclipse Distribution License (EDL) (similar to BSD)
+✔ Commercial use allowed
+✔ Enterprise safe
+✅ Is it used in industry?
+✔ YES — but with nuance
+
+Used in:
+
+IDEs (Eclipse)
+Dev tools
+Automation tools (like your use case)
+⚠️ BUT — Important Reality
+
+JGit is:
+
+Aspect	Reality
+Feature completeness	❌ Not 100% same as Git CLI
+Performance	⚠️ Slower than native Git
+Complexity	⚠️ API is verbose
+Stability	✅ Stable for common ops
+🔥 My Practical Recommendation (based on your use case)
+✔ Use JGit IF:
+You want pure Java solution
+No external dependency on git binary
+Jenkins container may not have git
+❗ Consider CLI Git IF:
+Performance matters
+Large repo
+Complex branching
+
+Example:
+
+git clone ...
+git checkout ...
+git add .
+git commit -m "..."
+git push
+
+👉 This is often simpler + faster
+
+🏆 Final Recommendation (Architect view)
+
+Given your use case:
+
+👉 Jenkins job
+👉 Controlled environment
+👉 Moderate file size
+
+✅ JGit is absolutely fine
+
+BUT:
+
+If this grows → consider switching to Git CLI
+
+🚀 If you want next level
+
+I can help you:
+
+Add “commit only if changes” logic
+Create branch automatically if missing
+Push to different folders per entity/app
+Compare YAML vs existing JSON (diff engine)
+
