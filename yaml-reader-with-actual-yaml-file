@@ -1,0 +1,345 @@
+Good call — with this kind of YAML, clarity matters more than cleverness.
+I’ll give you a clean, production-ready version of everything, aligned with your actual YAML (entities → applications → records).
+
+✅ 1. Final Understanding (your YAML shape)
+entities
+ └── entityId
+     └── applications[]
+         ├── application (name)
+         └── records[]  ← dynamic structure
+
+👉 So we will:
+
+NOT create rigid DTOs for records
+Use flexible mapping
+Generate dynamic JSON per record
+✅ 2. Final Project Structure
+src/main/java/com/example/configloader/
+
+ ├── Application.java
+ ├── runner/
+ │     └── JobRunner.java
+ ├── github/
+ │     └── GitHubService.java
+ ├── parser/
+ │     ├── YamlParser.java
+ │     └── JsonWriter.java
+ ├── service/
+ │     └── ConfigLoaderService.java
+ └── model/
+       ├── RootConfig.java
+       ├── Entity.java
+       └── Application.java
+✅ 3. Maven Dependencies
+<dependencies>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.kohsuke</groupId>
+        <artifactId>github-api</artifactId>
+        <version>1.325</version>
+    </dependency>
+
+    <dependency>
+        <groupId>com.fasterxml.jackson.dataformat</groupId>
+        <artifactId>jackson-dataformat-yaml</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+
+</dependencies>
+✅ 4. Main Application
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+✅ 5. MODEL CLASSES (Important — simplified & robust)
+🔹 RootConfig.java
+package com.example.configloader.model;
+
+import lombok.Data;
+import java.util.List;
+
+@Data
+public class RootConfig {
+    private List<Entity> entities;
+}
+🔹 Entity.java
+package com.example.configloader.model;
+
+import lombok.Data;
+import java.util.List;
+
+@Data
+public class Entity {
+    private String entityId;
+    private List<Application> applications;
+}
+🔹 Application.java
+package com.example.configloader.model;
+
+import lombok.Data;
+import java.util.List;
+import java.util.Map;
+
+@Data
+public class Application {
+    private String application;
+
+    // dynamic records (VERY IMPORTANT)
+    private List<Map<String, Object>> records;
+}
+✅ 6. GitHub Service
+package com.example.configloader.github;
+
+import org.kohsuke.github.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
+
+@Service
+public class GitHubService {
+
+    @Value("${GITHUB_TOKEN}")
+    private String token;
+
+    public InputStream fetchFile(String repo, String branch, String path) throws Exception {
+
+        GitHub github = new GitHubBuilder()
+                .withOAuthToken(token)
+                .build();
+
+        GHRepository repository = github.getRepository(repo);
+
+        GHContent content = repository.getFileContent(path, branch);
+
+        return content.read();
+    }
+}
+✅ 7. YAML Parser (robust)
+package com.example.configloader.parser;
+
+import com.example.configloader.model.RootConfig;
+import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
+
+@Service
+public class YamlParser {
+
+    private final ObjectMapper mapper;
+
+    public YamlParser() {
+        this.mapper = new ObjectMapper(new YAMLFactory());
+
+        mapper.configure(
+                DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+                false
+        );
+    }
+
+    public RootConfig parse(InputStream inputStream) throws Exception {
+        return mapper.readValue(inputStream, RootConfig.class);
+    }
+}
+✅ 8. JSON Writer
+package com.example.configloader.parser;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
+
+import java.io.File;
+
+@Service
+public class JsonWriter {
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    public void write(Object obj, String fileName) throws Exception {
+        mapper.writerWithDefaultPrettyPrinter()
+                .writeValue(new File(fileName), obj);
+    }
+}
+✅ 9. ConfigLoaderService (CORE LOGIC — FINAL)
+package com.example.configloader.service;
+
+import com.example.configloader.github.GitHubService;
+import com.example.configloader.model.*;
+import com.example.configloader.parser.JsonWriter;
+import com.example.configloader.parser.YamlParser;
+import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
+import java.util.Map;
+
+@Service
+public class ConfigLoaderService {
+
+    private final GitHubService gitHubService;
+    private final YamlParser yamlParser;
+    private final JsonWriter jsonWriter;
+
+    public ConfigLoaderService(GitHubService gitHubService,
+                               YamlParser yamlParser,
+                               JsonWriter jsonWriter) {
+        this.gitHubService = gitHubService;
+        this.yamlParser = yamlParser;
+        this.jsonWriter = jsonWriter;
+    }
+
+    public void process(String branch) throws Exception {
+
+        String repo = "your-org/order-config-repo";
+        String path = "configs/orders/order-config.yml";
+
+        InputStream is = gitHubService.fetchFile(repo, branch, path);
+
+        RootConfig root = yamlParser.parse(is);
+
+        for (Entity entity : root.getEntities()) {
+
+            String entityId = safe(entity.getEntityId());
+
+            for (Application app : entity.getApplications()) {
+
+                String appName = safe(app.getApplication());
+
+                int index = 1;
+
+                for (Map<String, Object> record : app.getRecords()) {
+
+                    String recordId = extractId(record);
+
+                    String fileName = String.format(
+                            "t24data-%s!%s-%s-%d.json",
+                            entityId,
+                            appName,
+                            recordId,
+                            index++
+                    );
+
+                    jsonWriter.write(record, fileName);
+                }
+            }
+        }
+    }
+
+    private String extractId(Map<String, Object> record) {
+        Object id = record.get("id");
+        if (id == null) id = record.get("ID");
+        return safe(id != null ? id.toString() : "unknown");
+    }
+
+    private String safe(String value) {
+        if (value == null) return "unknown";
+        return value.replaceAll("[^a-zA-Z0-9-_]", "_");
+    }
+}
+✅ 10. JobRunner (entry point)
+package com.example.configloader.runner;
+
+import com.example.configloader.service.ConfigLoaderService;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.stereotype.Component;
+
+@Component
+public class JobRunner implements CommandLineRunner {
+
+    private final ConfigLoaderService service;
+
+    public JobRunner(ConfigLoaderService service) {
+        this.service = service;
+    }
+
+    @Override
+    public void run(String... args) throws Exception {
+
+        String branch = "main";
+
+        for (String arg : args) {
+            if (arg.startsWith("--branch=")) {
+                branch = arg.split("=")[1];
+            }
+        }
+
+        service.process(branch);
+    }
+}
+✅ 11. Jenkins Pipeline (FINAL)
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'BRANCH_NAME', defaultValue: 'main')
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('github-token-id')
+    }
+
+    stages {
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Run') {
+            steps {
+                sh """
+                java -jar target/app.jar \
+                --branch=${BRANCH_NAME}
+                """
+            }
+        }
+    }
+}
+✅ 12. Output Examples (Based on YOUR YAML)
+t24data-Korea!PP_COMPANY_PROPERTIES-KRW_20211230-1.json
+t24data-Korea!CURRENCY-EUR-1.json
+t24data-Korea!CURRENCY-USD-2.json
+t24data-Korea!CURRENCY-KRW-3.json
+🔥 Final Architecture Insight (important)
+
+You now have:
+
+✅ Flexible ingestion engine
+Any YAML structure (within this pattern)
+No DTO explosion
+Handles weird keys (*, _)
+⚠️ Still missing (for production)
+
+If this goes live, you should add:
+
+Validation layer
+Retry for GitHub
+Parallel processing
+Output directory control
+Logging (not System.out)
+🚀 If you want next step
+
+I can help you evolve this into:
+
+Mini Spring Cloud Config alternative
+Add schema validation (fail Jenkins if invalid YAML)
+Push JSON to S3 / API / MQ
+
+Just say 👍
