@@ -1,0 +1,40 @@
+package com.socgen.gtba.dsfconfigtransformer.config;
+
+import lombok.Getter;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Configuration;
+
+@Getter
+@Configuration
+public class AppConfig {
+
+    /** GitHub PAT — injected from GITHUB_TOKEN env var (set by Jenkins or K8s Secret) */
+    @Value("${github.token}")
+    private String githubToken;
+
+    /** Feature branch name — same branch used for source and target repos */
+    @Value("${github.branch}")
+    private String branchName;
+
+    /** Local directory containing the input CSV files (written by Jenkins or init container) */
+    @Value("${app.input-dir}")
+    private String inputDir;
+
+    /** Target GitHub repository URL */
+    @Value("${github.target.repo-url}")
+    private String targetRepoUrl;
+
+    /**
+     * Path inside the target repository where JSON files will be placed.
+     * Resolved by this application — not by Jenkins or K8s.
+     * Example: "data/entities" → GTPS-Asia/Transact-Entity/data/entities/<file>.json
+     */
+    @Value("${github.target.json-path:}")
+    private String targetJsonPath;
+
+    @Value("${github.committer.name:CsvToJsonBot}")
+    private String committerName;
+
+    @Value("${github.committer.email:bot@gtps.com}")
+    private String committerEmail;
+}
