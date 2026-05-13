@@ -1,0 +1,23 @@
+levels:
+  level0:
+    - COMPANY
+    - CURRENCY
+    - DE.PARAM
+    - PP.CLIENT.COND.PRODUCT
+
+  level1:
+    - PP.COMPANY.PROPERTIES
+    - DE.INTERFACE
+    - PAYMENT.ORDER.PARAMETER
+    - PP.BANK.CHARGES
+
+  level2:
+    - DE.CARRIER
+    - PP.FEETYPE.CREDIT.ACCOUNT
+    - PP.CLIENT.CHARGES
+
+  level3:
+    - DE.PRODUCT
+
+  level4:
+    - PP.HEAVYWEIGHT.PRODUCTCOND
