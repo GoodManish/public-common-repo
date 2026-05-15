@@ -1,0 +1,783 @@
+Load YAML
+    ↓
+Root validation
+    ↓
+Application validation
+    ↓
+Business validation
+    ↓
+IF errors exist:
+       print ALL errors
+       fail pipeline
+ELSE:
+       generate JSON
+
+
+
+-------------
+
+dsf-yaml-validator/
+│
+├── pom.xml
+│
+├── src/main/java/
+│   └── com/dsf/validator/
+│
+│       ├── main/
+│       │     └── ValidationApplication.java
+│       │
+│       ├── validator/
+│       │     ├── RootYamlValidator.java
+│       │     ├── ApplicationSchemaRouter.java
+│       │     ├── BusinessRuleValidator.java
+│       │     └── ValidationReportBuilder.java
+│       │
+│       ├── exception/
+│       │     ├── YamlValidationException.java
+│       │     └── SchemaLoadingException.java
+│       │
+│       ├── model/
+│       │     ├── ValidationError.java
+│       │     └── ValidationReport.java
+│       │
+│       └── util/
+│             ├── YamlLoader.java
+│             └── SchemaLoader.java
+│
+└── src/main/resources/
+    └── schema/
+          ├── root-schema.json
+          ├── pp-company-properties-schema.json
+          ├── pp-bank-conditions-schema.json
+          └── currency-schema.json
+
+------------
+
+<dependencies>
+
+    <!-- YAML -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.dataformat</groupId>
+        <artifactId>jackson-dataformat-yaml</artifactId>
+        <version>2.17.1</version>
+    </dependency>
+
+    <!-- JSON -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>2.17.1</version>
+    </dependency>
+
+    <!-- JSON Schema Validator -->
+    <dependency>
+        <groupId>com.networknt</groupId>
+        <artifactId>json-schema-validator</artifactId>
+        <version>1.5.0</version>
+    </dependency>
+
+</dependencies>
+
+-----------
+
+STEP 1 — Root Schema
+root-schema.json
+
+This validates:
+
+root structure
+mandatory nodes
+applications existence
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+
+  "type": "object",
+
+  "required": ["entities"],
+
+  "additionalProperties": false,
+
+  "properties": {
+
+    "entities": {
+      "type": "array",
+
+      "minItems": 1,
+
+      "items": {
+
+        "type": "object",
+
+        "additionalProperties": true,
+
+        "required": [
+          "entityCode",
+          "applications"
+        ],
+
+        "properties": {
+
+          "entityCode": {
+            "type": "string",
+            "minLength": 1
+          },
+
+          "applications": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  }
+}
+
+---------------
+
+STEP 2 — Application Schemas
+
+You showed 3 applications:
+
+PP.COMPANY.PROPERTIES
+PP.BANK.CONDITIONS
+CURRENCY
+
+Each gets its own schema.
+
+This is VERY important.
+
+------------
+
+STEP 3 — PP.COMPANY.PROPERTIES Schema
+pp-company-properties-schema.json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+
+  "type": "object",
+
+  "required": [
+    "Home Currency Code",
+    "Homecountrycode",
+    "Application User ID",
+    "Companyregion",
+    "Time Zone"
+  ],
+
+  "additionalProperties": false,
+
+  "properties": {
+
+    "Home Currency Code": {
+      "type": "string",
+      "enum": ["HKD", "USD", "EUR", "KRW"]
+    },
+
+    "Homecountrycode": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2
+    },
+
+    "Application User ID": {
+      "type": "string",
+      "minLength": 1
+    },
+
+    "Companyregion": {
+      "type": "string",
+      "enum": ["ALL", "APAC", "EMEA"]
+    },
+
+    "Dealer Desk Enabled": {
+      "type": "string",
+      "enum": ["Y", "N"]
+    },
+
+    "Time Zone": {
+      "type": "string",
+      "pattern": "^[A-Za-z]+/[A-Za-z_]+$"
+    },
+
+    "Default company Indicator": {
+      "type": "string",
+      "enum": ["Y", "N"]
+    }
+  }
+}
+
+
+------------
+
+STEP 4 — Currency Schema
+currency-schema.json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+
+  "type": "object",
+
+  "required": [
+    "Numeric Ccy Code",
+    "Ccy Name",
+    "No Of Decimals",
+    "Country Code"
+  ],
+
+  "additionalProperties": false,
+
+  "properties": {
+
+    "Numeric Ccy Code": {
+      "type": "string",
+      "pattern": "^[0-9]{3}$"
+    },
+
+    "Ccy Name": {
+      "type": "string",
+      "minLength": 1
+    },
+
+    "No Of Decimals": {
+      "type": "string",
+      "enum": ["0", "1", "2", "3", "4"]
+    },
+
+    "Country Code": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2
+    },
+
+    "CLS Ccy": {
+      "type": "string",
+      "enum": ["Yes", "No"]
+    }
+  }
+}
+
+------------
+
+
+STEP 5 — Validation Error Model
+ValidationError.java
+public class ValidationError {
+
+    private String path;
+
+    private String message;
+
+    private String invalidValue;
+
+    public ValidationError(
+            String path,
+            String message,
+            String invalidValue) {
+
+        this.path = path;
+        this.message = message;
+        this.invalidValue = invalidValue;
+    }
+
+    @Override
+    public String toString() {
+
+        return "\nPath: " + path +
+               "\nReason: " + message +
+               "\nInvalid Value: " + invalidValue;
+    }
+}
+
+
+------------------
+
+STEP 6 — Custom Exception
+YamlValidationException.java
+import java.util.List;
+
+public class YamlValidationException
+        extends RuntimeException {
+
+    private final List<ValidationError> errors;
+
+    public YamlValidationException(
+            List<ValidationError> errors) {
+
+        super("YAML Validation Failed");
+
+        this.errors = errors;
+    }
+
+    public List<ValidationError> getErrors() {
+        return errors;
+    }
+}
+
+-----------
+
+STEP 7 — YAML Loader
+YamlLoader.java
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+
+import java.io.File;
+
+public class YamlLoader {
+
+    private static final ObjectMapper mapper =
+            new ObjectMapper(new YAMLFactory());
+
+    public static JsonNode load(File file)
+            throws Exception {
+
+        return mapper.readTree(file);
+    }
+}
+
+---------
+STEP 8 — Schema Loader
+SchemaLoader.java
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class SchemaLoader {
+
+    public static JsonNode loadSchema(
+            String schemaFile)
+            throws Exception {
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        return mapper.readTree(
+                SchemaLoader.class
+                        .getResourceAsStream(
+                                "/schema/" + schemaFile));
+    }
+}
+
+----------
+
+STEP 9 — Root Validator
+RootYamlValidator.java
+import com.fasterxml.jackson.databind.JsonNode;
+import com.networknt.schema.*;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class RootYamlValidator {
+
+    public void validate(
+            JsonNode yamlNode,
+            String schemaName,
+            ValidationContext context)
+            throws Exception {
+
+        JsonNode schemaNode =
+                SchemaLoader.loadSchema(schemaName);
+
+        JsonSchemaFactory factory =
+                JsonSchemaFactory.getInstance(
+                        SpecVersion.VersionFlag.V7);
+
+        JsonSchema schema =
+                factory.getSchema(schemaNode);
+
+        Set<ValidationMessage> messages =
+                schema.validate(yamlNode);
+
+        for (ValidationMessage msg : messages) {
+
+            context.addError(
+                    new ValidationError(
+                            msg.getPath(),
+                            msg.getMessage(),
+                            "INVALID"));
+        }
+    }
+}
+
+--------------
+
+STEP 10 — Application Schema Router
+
+This is the most important layer.
+
+ApplicationSchemaRouter.java
+import com.fasterxml.jackson.databind.JsonNode;
+
+import java.util.Iterator;
+
+ApplicationSchemaRouter.java
+public class ApplicationSchemaRouter {
+
+    private final RootYamlValidator validator =
+            new RootYamlValidator();
+
+    public void validateApplications(
+            JsonNode root,
+            ValidationContext context)
+            throws Exception {
+
+        JsonNode entities =
+                root.get("entities");
+
+        for (JsonNode entity : entities) {
+
+            JsonNode applications =
+                    entity.get("applications");
+
+            for (JsonNode appNode : applications) {
+
+                try {
+
+                    String applicationName =
+                            appNode.get("application")
+                                   .asText();
+
+                    Iterator<String> fields =
+                            appNode.fieldNames();
+
+                    while (fields.hasNext()) {
+
+                        String field =
+                                fields.next();
+
+                        if ("application"
+                                .equals(field)) {
+
+                            continue;
+                        }
+
+                        JsonNode actualData =
+                                appNode.get(field);
+
+                        validateByApplication(
+                                applicationName,
+                                actualData,
+                                context);
+                    }
+
+                } catch (Exception ex) {
+
+                    context.addError(
+                            new ValidationError(
+                                    "$.applications",
+                                    ex.getMessage(),
+                                    "APPLICATION_ERROR"));
+                }
+            }
+        }
+    }
+
+    private void validateByApplication(
+            String applicationName,
+            JsonNode actualData,
+            ValidationContext context)
+            throws Exception {
+
+        switch (applicationName) {
+
+            case "PP.COMPANY.PROPERTIES":
+
+                validator.validate(
+                        actualData,
+                        "pp-company-properties-schema.json",
+                        context);
+
+                break;
+
+            case "CURRENCY":
+
+                validateCurrencies(
+                        actualData,
+                        context);
+
+                break;
+
+            case "PP.BANK.CONDITIONS":
+
+                validator.validate(
+                        actualData,
+                        "pp-bank-conditions-schema.json",
+                        context);
+
+                break;
+
+            default:
+
+                context.addError(
+                        new ValidationError(
+                                "$.application",
+                                "No schema defined for application: "
+                                        + applicationName,
+                                applicationName));
+        }
+    }
+
+    private void validateCurrencies(
+            JsonNode currencyNode,
+            ValidationContext context)
+            throws Exception {
+
+        Iterator<String> currencies =
+                currencyNode.fieldNames();
+
+        while (currencies.hasNext()) {
+
+            String currency =
+                    currencies.next();
+
+            JsonNode currencyData =
+                    currencyNode.get(currency);
+
+            validator.validate(
+                    currencyData,
+                    "currency-schema.json",
+                    context);
+        }
+    }
+}
+
+------------
+
+STEP 11 — Business Validation Layer
+BusinessRuleValidator.java
+import com.fasterxml.jackson.databind.JsonNode;
+
+public class BusinessRuleValidator {
+
+    public void validate(
+            JsonNode root,
+            ValidationContext context) {
+
+        JsonNode entities =
+                root.get("entities");
+
+        for (JsonNode entity : entities) {
+
+            JsonNode applications =
+                    entity.get("applications");
+
+            for (JsonNode app : applications) {
+
+                String appName =
+                        app.get("application")
+                           .asText();
+
+                if ("PP.COMPANY.PROPERTIES"
+                        .equals(appName)) {
+
+                    validateCompanyRules(
+                            app,
+                            context);
+                }
+            }
+        }
+    }
+
+    private void validateCompanyRules(
+            JsonNode app,
+            ValidationContext context) {
+
+        JsonNode data =
+                app.get("HKG-20211229");
+
+        if (data == null) {
+            return;
+        }
+
+        String homeCurrency =
+                data.path("Home Currency Code")
+                    .asText();
+
+        String country =
+                data.path("Homecountrycode")
+                    .asText();
+
+        if ("HK".equals(country)
+                && !"HKD".equals(homeCurrency)) {
+
+            context.addError(
+                    new ValidationError(
+                            "$.Home Currency Code",
+                            "HK country must use HKD",
+                            homeCurrency));
+        }
+    }
+}
+
+----------
+
+STEP 12 — Main Runner
+ValidationApplication.java
+import com.fasterxml.jackson.databind.JsonNode;
+
+import java.io.File;
+
+public class ValidationApplication {
+
+    public static void main(String[] args)
+            throws Exception {
+
+        File yamlFile =
+                new File(
+                        "korea-entity-configuration.yaml");
+
+        JsonNode root =
+                YamlLoader.load(yamlFile);
+
+        ValidationContext context =
+                new ValidationContext();
+
+        RootYamlValidator validator =
+                new RootYamlValidator();
+
+        validator.validate(
+                root,
+                "root-schema.json",
+                context);
+
+        ApplicationSchemaRouter router =
+                new ApplicationSchemaRouter();
+
+        router.validateApplications(
+                root,
+                context);
+
+        BusinessRuleValidator businessValidator =
+                new BusinessRuleValidator();
+
+        businessValidator.validate(
+                root,
+                context);
+
+        /*
+           FINAL DECISION POINT
+         */
+
+        if (context.hasErrors()) {
+
+            System.out.println(
+                    "\n========== VALIDATION ERRORS ==========");
+
+            context.getErrors()
+                   .forEach(System.out::println);
+
+            throw new RuntimeException(
+                    "\nValidation failed with "
+                    + context.getErrors().size()
+                    + " error(s)");
+        }
+
+        /*
+           SAFE TO PROCEED
+         */
+
+        System.out.println(
+                "\nYAML Validation Successful");
+
+        generateJsonFiles(root);
+    }
+
+    private static void generateJsonFiles(
+            JsonNode root) {
+
+        System.out.println(
+                "Generating JSON files...");
+    }
+}
+
+----------
+
+What This Design Gives You
+✔ Modular Validation
+
+Each application owns its own schema.
+
+✔ Scalable
+
+New applications:
+
+TREASURY
+FX
+PAYMENTS
+ACCOUNTING
+
+Just add:
+
+schema
+router mapping
+
+No huge code rewrite.
+
+--Final Runtime Behavior--
+
+Now behavior becomes:
+
+PP.COMPANY.PROPERTIES
+    ❌ 3 errors
+
+PP.BANK.CONDITIONS
+    ❌ 1 error
+
+CURRENCY
+    ❌ 5 errors
+
+Validation continues for ALL
+
+Final Output:
+    9 total validation errors
+
+JSON generation NOT started
+
+------------------New Design -------------------------------------------------
+Validate ALL applications
+        ↓
+Collect ALL validation errors
+        ↓
+If errors exist:
+    throw consolidated report
+Else:
+    proceed with JSON generation
+
+
+
+
+
+STEP 1 — ValidationContext
+ValidationContext.java
+
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class ValidationContext {
+
+    private final List<ValidationError> errors =
+            new ArrayList<>();
+
+    public void addError(
+            ValidationError error) {
+
+        errors.add(error);
+    }
+
+    public void addErrors(
+            List<ValidationError> validationErrors) {
+
+        errors.addAll(validationErrors);
+    }
+
+    public boolean hasErrors() {
+
+        return !errors.isEmpty();
+    }
+
+    public List<ValidationError> getErrors() {
+
+        return errors;
+    }
+}
+
+------------
