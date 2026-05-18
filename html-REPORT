@@ -1,0 +1,587 @@
+html-----------
+
+public class ValidationError {
+
+    private String applicationName;
+
+    private String path;
+
+    private String message;
+
+    private String invalidValue;
+
+    public ValidationError(
+            String applicationName,
+            String path,
+            String message,
+            String invalidValue) {
+
+        this.applicationName = applicationName;
+        this.path = path;
+        this.message = message;
+        this.invalidValue = invalidValue;
+    }
+
+    public String getApplicationName() {
+        return applicationName;
+    }
+
+    public String getPath() {
+        return path;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public String getInvalidValue() {
+        return invalidValue;
+    }
+}
+
+
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class ValidationContext {
+
+    private final List<ValidationError> errors =
+            new ArrayList<>();
+
+    public void addError(
+            ValidationError error) {
+
+        errors.add(error);
+    }
+
+    public boolean hasErrors() {
+
+        return !errors.isEmpty();
+    }
+
+    public List<ValidationError> getErrors() {
+
+        return errors;
+    }
+}
+
+
+
+      import com.fasterxml.jackson.databind.JsonNode;
+import com.networknt.schema.*;
+
+import java.util.Set;
+
+public class RootYamlValidator {
+
+    public void validate(
+            JsonNode yamlNode,
+            String schemaName,
+            String applicationName,
+            ValidationContext context)
+            throws Exception {
+
+        JsonNode schemaNode =
+                SchemaLoader.loadSchema(schemaName);
+
+        JsonSchemaFactory factory =
+                JsonSchemaFactory.getInstance(
+                        SpecVersion.VersionFlag.V7);
+
+        JsonSchema schema =
+                factory.getSchema(schemaNode);
+
+        Set<ValidationMessage> messages =
+                schema.validate(yamlNode);
+
+        for (ValidationMessage msg : messages) {
+
+            context.addError(
+                    new ValidationError(
+                            applicationName,
+                            msg.getPath(),
+                            msg.getMessage(),
+                            "INVALID"));
+        }
+    }
+}
+
+
+
+import com.fasterxml.jackson.databind.JsonNode;
+
+import java.util.Iterator;
+
+public class ApplicationSchemaRouter {
+
+    private final RootYamlValidator validator =
+            new RootYamlValidator();
+
+    public void validateApplications(
+            JsonNode root,
+            ValidationContext context)
+            throws Exception {
+
+        JsonNode entities =
+                root.get("entities");
+
+        for (JsonNode entity : entities) {
+
+            JsonNode applications =
+                    entity.get("applications");
+
+            for (JsonNode appNode : applications) {
+
+                try {
+
+                    String applicationName =
+                            appNode.get("application")
+                                   .asText();
+
+                    Iterator<String> fields =
+                            appNode.fieldNames();
+
+                    while (fields.hasNext()) {
+
+                        String field =
+                                fields.next();
+
+                        if ("application"
+                                .equals(field)) {
+
+                            continue;
+                        }
+
+                        JsonNode actualData =
+                                appNode.get(field);
+
+                        validateByApplication(
+                                applicationName,
+                                actualData,
+                                context);
+                    }
+
+                } catch (Exception ex) {
+
+                    context.addError(
+                            new ValidationError(
+                                    "SYSTEM",
+                                    "$.applications",
+                                    ex.getMessage(),
+                                    "APPLICATION_ERROR"));
+                }
+            }
+        }
+    }
+
+    private void validateByApplication(
+            String applicationName,
+            JsonNode actualData,
+            ValidationContext context)
+            throws Exception {
+
+        switch (applicationName) {
+
+            case "PP.COMPANY.PROPERTIES":
+
+                validateDynamicRecords(
+                        applicationName,
+                        actualData,
+                        "pp-company-properties-schema.json",
+                        context);
+
+                break;
+
+            case "CURRENCY":
+
+                validateDynamicRecords(
+                        applicationName,
+                        actualData,
+                        "currency-schema.json",
+                        context);
+
+                break;
+
+            case "PP.BANK.CONDITIONS":
+
+                validateDynamicRecords(
+                        applicationName,
+                        actualData,
+                        "pp-bank-conditions-schema.json",
+                        context);
+
+                break;
+
+            default:
+
+                context.addError(
+                        new ValidationError(
+                                applicationName,
+                                "$.application",
+                                "No schema defined for application",
+                                applicationName));
+        }
+    }
+
+    private void validateDynamicRecords(
+            String applicationName,
+            JsonNode rootNode,
+            String schemaName,
+            ValidationContext context)
+            throws Exception {
+
+        Iterator<String> fields =
+                rootNode.fieldNames();
+
+        while (fields.hasNext()) {
+
+            String dynamicKey =
+                    fields.next();
+
+            JsonNode record =
+                    rootNode.get(dynamicKey);
+
+            validator.validate(
+                    record,
+                    schemaName,
+                    applicationName,
+                    context);
+        }
+    }
+}
+
+
+
+
+
+import com.fasterxml.jackson.databind.JsonNode;
+
+public class BusinessRuleValidator {
+
+    /*
+       OPTIONAL VALIDATION LAYER
+
+       Keep empty initially.
+
+       Future use cases:
+       - cross-field validation
+       - duplicate detection
+       - runtime validation
+       - cross-application validation
+    */
+
+    public void validate(
+            JsonNode root,
+            ValidationContext context) {
+
+        /*
+           NO-OP
+         */
+    }
+}
+
+
+
+
+
+
+  import java.io.FileWriter;
+import java.time.LocalDateTime;
+import java.util.List;
+
+public class HtmlValidationReportGenerator {
+
+    public void generate(
+            List<ValidationError> errors,
+            String outputFile)
+            throws Exception {
+
+        boolean success = errors.isEmpty();
+
+        String status =
+                success ? "SUCCESS" : "FAILED";
+
+        String statusColor =
+                success ? "green" : "red";
+
+        StringBuilder html =
+                new StringBuilder();
+
+        html.append("""
+            <html>
+            <head>
+
+            <title>YAML Validation Report</title>
+
+            <style>
+
+                body {
+                    font-family: Arial;
+                    margin: 20px;
+                    background-color: #f4f4f4;
+                }
+
+                h1 {
+                    color: #333;
+                }
+
+                .summary {
+                    background: white;
+                    padding: 15px;
+                    border-radius: 5px;
+                    margin-bottom: 20px;
+                }
+
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    background: white;
+                }
+
+                th {
+                    background-color: #333;
+                    color: white;
+                    padding: 12px;
+                    text-align: left;
+                }
+
+                td {
+                    padding: 10px;
+                    border-bottom: 1px solid #ddd;
+                }
+
+                tr:nth-child(even) {
+                    background-color: #f9f9f9;
+                }
+
+            </style>
+
+            </head>
+            <body>
+            """);
+
+        html.append("<h1>YAML Validation Report</h1>");
+
+        html.append("<div class='summary'>");
+
+        html.append("<p><b>Status:</b> ")
+                .append("<span style='color:")
+                .append(statusColor)
+                .append("'>")
+                .append(status)
+                .append("</span></p>");
+
+        html.append("<p><b>Total Errors:</b> ")
+                .append(errors.size())
+                .append("</p>");
+
+        html.append("<p><b>Generated At:</b> ")
+                .append(LocalDateTime.now())
+                .append("</p>");
+
+        html.append("</div>");
+
+        if (!success) {
+
+            html.append("""
+                <table>
+
+                <tr>
+                    <th>Application</th>
+                    <th>Path</th>
+                    <th>Error</th>
+                    <th>Invalid Value</th>
+                </tr>
+                """);
+
+            for (ValidationError error : errors) {
+
+                html.append("<tr>");
+
+                html.append("<td>")
+                        .append(error.getApplicationName())
+                        .append("</td>");
+
+                html.append("<td>")
+                        .append(error.getPath())
+                        .append("</td>");
+
+                html.append("<td>")
+                        .append(error.getMessage())
+                        .append("</td>");
+
+                html.append("<td>")
+                        .append(error.getInvalidValue())
+                        .append("</td>");
+
+                html.append("</tr>");
+            }
+
+            html.append("</table>");
+        }
+
+        html.append("</body></html>");
+
+        FileWriter writer =
+                new FileWriter(outputFile);
+
+        writer.write(html.toString());
+
+        writer.close();
+    }
+}
+
+
+
+
+
+import java.io.FileWriter;
+import java.time.LocalDateTime;
+import java.util.List;
+
+public class HtmlValidationReportGenerator {
+
+    public void generate(
+            List<ValidationError> errors,
+            String outputFile)
+            throws Exception {
+
+        boolean success = errors.isEmpty();
+
+        String status =
+                success ? "SUCCESS" : "FAILED";
+
+        String statusColor =
+                success ? "green" : "red";
+
+        StringBuilder html =
+                new StringBuilder();
+
+        html.append("""
+            <html>
+            <head>
+
+            <title>YAML Validation Report</title>
+
+            <style>
+
+                body {
+                    font-family: Arial;
+                    margin: 20px;
+                    background-color: #f4f4f4;
+                }
+
+                h1 {
+                    color: #333;
+                }
+
+                .summary {
+                    background: white;
+                    padding: 15px;
+                    border-radius: 5px;
+                    margin-bottom: 20px;
+                }
+
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    background: white;
+                }
+
+                th {
+                    background-color: #333;
+                    color: white;
+                    padding: 12px;
+                    text-align: left;
+                }
+
+                td {
+                    padding: 10px;
+                    border-bottom: 1px solid #ddd;
+                }
+
+                tr:nth-child(even) {
+                    background-color: #f9f9f9;
+                }
+
+            </style>
+
+            </head>
+            <body>
+            """);
+
+        html.append("<h1>YAML Validation Report</h1>");
+
+        html.append("<div class='summary'>");
+
+        html.append("<p><b>Status:</b> ")
+                .append("<span style='color:")
+                .append(statusColor)
+                .append("'>")
+                .append(status)
+                .append("</span></p>");
+
+        html.append("<p><b>Total Errors:</b> ")
+                .append(errors.size())
+                .append("</p>");
+
+        html.append("<p><b>Generated At:</b> ")
+                .append(LocalDateTime.now())
+                .append("</p>");
+
+        html.append("</div>");
+
+        if (!success) {
+
+            html.append("""
+                <table>
+
+                <tr>
+                    <th>Application</th>
+                    <th>Path</th>
+                    <th>Error</th>
+                    <th>Invalid Value</th>
+                </tr>
+                """);
+
+            for (ValidationError error : errors) {
+
+                html.append("<tr>");
+
+                html.append("<td>")
+                        .append(error.getApplicationName())
+                        .append("</td>");
+
+                html.append("<td>")
+                        .append(error.getPath())
+                        .append("</td>");
+
+                html.append("<td>")
+                        .append(error.getMessage())
+                        .append("</td>");
+
+                html.append("<td>")
+                        .append(error.getInvalidValue())
+                        .append("</td>");
+
+                html.append("</tr>");
+            }
+
+            html.append("</table>");
+        }
+
+        html.append("</body></html>");
+
+        FileWriter writer =
+                new FileWriter(outputFile);
+
+        writer.write(html.toString());
+
+        writer.close();
+    }
+}
+
+
+
+              
