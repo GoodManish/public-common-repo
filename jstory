@@ -1,0 +1,26 @@
+Story Title:
+Implement YAML Schema Validation Framework for DSF Configuration Processing
+
+Description:
+Implement a configurable YAML validation framework in DSF Java application to validate entity configuration YAML files before JSON generation and T24 onboarding processing.
+
+Scope:
+- Validate YAML structure and field values using JSON schema
+- Support application-wise modular schemas
+- Externalize application-schema mapping via YAML configuration
+- Aggregate validation errors across all applications
+- Generate HTML validation report for both success and failure scenarios
+- Stop JSON generation if validation errors exist
+- Support future business-rule validation extension
+
+Applications in scope:
+- PP.COMPANY.PROPERTIES
+- PP.BANK.CONDITIONS
+- CURRENCY
+
+Acceptance Criteria:
+- YAML validation executes before JSON generation
+- All validation errors are collected and reported in single execution
+- HTML report generated for every execution
+- No hardcoded switch-case for application-schema mapping
+- JSON generation proceeds only if validation succeeds
